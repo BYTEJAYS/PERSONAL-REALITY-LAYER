@@ -160,6 +160,20 @@ curl -s localhost:8000/insights | jq
 curl -s "localhost:8000/reconstruct/2026-05-29" | jq
 ```
 
+### 🧬 Train the cognitive twin — no infrastructure needed
+
+Build the full cognitive model **offline**, straight from your local git history
+(no Docker, no DB, pure Python):
+
+```bash
+cd backend
+python scripts/train.py            # scans ~ for git repos
+# or: python scripts/train.py ~/repo-a ~/repo-b
+```
+
+Prints a cognitive-twin report (traits · knowledge distribution · discovered
+patterns · rising interests) and writes `artifacts/cognitive_twin.json`.
+
 ---
 
 ## 🛰️ API surface
