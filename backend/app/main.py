@@ -9,7 +9,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from . import graph
 from .config import get_settings
 from .db import init_db
-from .routers import brain, chat, ingest, memories, reconstruct
+from .routers import brain, chat, ingest, insights, memories, reconstruct
 
 logging.basicConfig(level=logging.INFO)
 log = logging.getLogger("prl")
@@ -39,6 +39,7 @@ app.include_router(brain.router)
 app.include_router(reconstruct.router)
 app.include_router(ingest.router)
 app.include_router(chat.router)
+app.include_router(insights.router)
 
 
 @app.get("/health", tags=["meta"])
@@ -51,5 +52,5 @@ def root():
     return {
         "name": "Personal Reality Layer",
         "docs": "/docs",
-        "endpoints": ["/health", "/chat", "/brain/state", "/memories", "/reconstruct/{day}", "/ingest/git"],
+        "endpoints": ["/health", "/chat", "/insights", "/brain/state", "/memories", "/reconstruct/{day}", "/ingest/git"],
     }
