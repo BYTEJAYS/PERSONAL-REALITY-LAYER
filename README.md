@@ -207,6 +207,8 @@ Full interactive reference at **`/docs`** (OpenAPI / Swagger).
 - [x] **Prediction Engine** — burnout · completion · habit stability · knowledge decay
 - [x] **Trend Engine** — rising / fading / emerging / dormant interests
 - [x] **Pattern Discovery (L4)** — contemporaneous + time-lagged correlations
+- [x] **Predictive ML model** — active-day logistic regression, from scratch
+  (verified on synthetic data; flags itself as untrustworthy until enough signal)
 - [x] Cognitive Core — particle brain from a real mesh
 - [ ] More connectors — calendar · browser · documents · photos · GPS
 - [ ] Reality Interface (Frontend 1) — Home · Timeline · Life Graph · Knowledge Galaxy
