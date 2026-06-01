@@ -68,6 +68,18 @@ class BrainState(BaseModel):
     neo4j: bool
 
 
+class ChatIn(BaseModel):
+    message: str
+
+
+class ChatOut(BaseModel):
+    answer: str
+    intent: str
+    llm_used: bool
+    citations: list[dict]
+    data: dict
+
+
 class GitIngestIn(BaseModel):
     path: str
     project: str | None = None  # defaults to repo dir name

@@ -23,6 +23,14 @@ class Settings(BaseSettings):
     embedding_dim: int = 384
     openai_api_key: str | None = None
 
+    # AI Chat layer. Local-first: talk to Ollama if it's running, otherwise the
+    # query engine falls back to deterministic, evidence-grounded answers.
+    llm_provider: str = "ollama"  # "ollama" | "anthropic" | "none"
+    ollama_url: str = "http://localhost:11434"
+    llm_model: str = "llama3.1"
+    anthropic_api_key: str | None = None
+    anthropic_model: str = "claude-haiku-4-5-20251001"
+
     cors_origins: list[str] = ["http://localhost:3000", "http://localhost:3001"]
 
 
