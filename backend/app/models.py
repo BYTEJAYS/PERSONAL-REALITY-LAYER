@@ -53,6 +53,9 @@ class Memory(Base):
     title: Mapped[str] = mapped_column(String(512))
     content: Mapped[str] = mapped_column(Text, default="")
 
+    # PCME memory type: episodic | knowledge | social | goal
+    memory_type: Mapped[str] = mapped_column(String(16), default="episodic", index=True)
+
     location: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
     emotion: Mapped[str | None] = mapped_column(String(32), nullable=True)
     importance: Mapped[float] = mapped_column(Float, default=0.5)

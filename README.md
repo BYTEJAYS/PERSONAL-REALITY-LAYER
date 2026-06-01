@@ -168,6 +168,9 @@ curl -s "localhost:8000/reconstruct/2026-05-29" | jq
 |---|---|
 | `POST /chat` | Ask your second brain — grounded answers with citations |
 | `GET  /insights` | Evidence-backed observations about your life |
+| `GET  /cognitive/model` | The digital twin — traits, knowledge distribution, evidence |
+| `GET  /cognitive/predictions` | Probabilistic forecasts (burnout, completion, decay) |
+| `GET  /cognitive/trends` | How interests/skills are rising, fading, emerging |
 | `GET  /reconstruct/{day}` | Narrative reconstruction of a single day |
 | `POST /memories` · `GET /memories` | Ingest / list & filter memories |
 | `GET  /memories/search?q=` | Semantic (vector) search |
@@ -182,10 +185,14 @@ Full interactive reference at **`/docs`** (OpenAPI / Swagger).
 ## 🗺️ Roadmap
 
 - [x] Memory Engine · Brain API · git ingestion
+- [x] Memory typing — episodic · knowledge · social · goal
 - [x] AI Chat query engine (local-LLM-first, cited)
 - [x] Insight Engine (evidence-grounded)
+- [x] **Cognitive Model (L5)** — digital-twin traits with evidence
+- [x] **Prediction Engine** — burnout · completion · habit stability · knowledge decay
+- [x] **Trend Engine** — rising / fading / emerging / dormant interests
 - [x] Cognitive Core — particle brain from a real mesh
-- [ ] Prediction Engine — burnout risk · completion probability · knowledge decay
+- [ ] Pattern Discovery (L4) — cross-signal correlations
 - [ ] More connectors — calendar · browser · documents · photos · GPS
 - [ ] Reality Interface (Frontend 1) — Home · Timeline · Life Graph · Knowledge Galaxy
 - [ ] Wire the particle brain to live `/brain/state`

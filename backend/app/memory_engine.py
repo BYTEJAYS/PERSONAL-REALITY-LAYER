@@ -38,6 +38,25 @@ class MemoryInput:
     meta: dict = field(default_factory=dict)
     # Stable de-dup key (e.g. git commit sha) so re-ingesting is idempotent.
     dedupe_key: str | None = None
+    # PCME memory type; classified from entities when left None.
+    memory_type: str | None = None
+
+
+def classify_memory_type(entities: list[EntityRef]) -> str:
+    """Episodic | knowledge | social | goal, from the memory's entity mix."""
+    persons = sum(1 for e in entities if e.type == "person")
+    has_goal = any(e.type == "goal" for e in entities)
+    has_project = any(e.type == "project" for e in entities)
+    has_skill = any(e.type == "skill" for e in entities)
+    if has_goal:
+        return "goal"
+    if persons >= 2:  # a real interaction, not just an author/owner
+        return "social"
+    if has_project:
+        return "episodic"
+    if has_skill:
+        return "knowledge"
+    return "episodic"
 
 
 def _get_or_create_entity(db: Session, type_: str, name: str) -> Entity:
@@ -75,6 +94,7 @@ def ingest(db: Session, item: MemoryInput) -> Memory | None:
         source=item.source,
         title=item.title[:512],
         content=item.content,
+        memory_type=item.memory_type or classify_memory_type(item.entities),
         location=item.location,
         emotion=item.emotion,
         importance=item.importance,

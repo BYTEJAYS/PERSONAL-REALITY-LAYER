@@ -37,6 +37,7 @@ class MemoryOut(BaseModel):
     source: str
     title: str
     content: str
+    memory_type: str
     location: dict | None
     emotion: str | None
     importance: float
@@ -46,6 +47,7 @@ class MemoryOut(BaseModel):
     def from_model(cls, m) -> "MemoryOut":
         return cls(
             id=m.id, ts=m.ts, source=m.source, title=m.title, content=m.content,
+            memory_type=m.memory_type,
             location=m.location, emotion=m.emotion, importance=m.importance,
             entities=[
                 EntityOut(type=l.entity.type, name=l.entity.name, role=l.role)
