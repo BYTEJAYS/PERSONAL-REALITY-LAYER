@@ -3,10 +3,16 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 
-from .. import cognitive_model, prediction_engine, trend_engine
+from .. import cognitive_model, pattern_engine, prediction_engine, trend_engine
 from ..db import get_db
 
 router = APIRouter(prefix="/cognitive", tags=["cognitive"])
+
+
+@router.get("/patterns")
+def get_patterns(db: Session = Depends(get_db)):
+    """Discovered behavioural correlations (contemporaneous + time-lagged)."""
+    return pattern_engine.discover(db)
 
 
 @router.get("/model")

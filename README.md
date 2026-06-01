@@ -171,6 +171,7 @@ curl -s "localhost:8000/reconstruct/2026-05-29" | jq
 | `GET  /cognitive/model` | The digital twin — traits, knowledge distribution, evidence |
 | `GET  /cognitive/predictions` | Probabilistic forecasts (burnout, completion, decay) |
 | `GET  /cognitive/trends` | How interests/skills are rising, fading, emerging |
+| `GET  /cognitive/patterns` | Discovered correlations — contemporaneous + time-lagged |
 | `GET  /reconstruct/{day}` | Narrative reconstruction of a single day |
 | `POST /memories` · `GET /memories` | Ingest / list & filter memories |
 | `GET  /memories/search?q=` | Semantic (vector) search |
@@ -191,8 +192,8 @@ Full interactive reference at **`/docs`** (OpenAPI / Swagger).
 - [x] **Cognitive Model (L5)** — digital-twin traits with evidence
 - [x] **Prediction Engine** — burnout · completion · habit stability · knowledge decay
 - [x] **Trend Engine** — rising / fading / emerging / dormant interests
+- [x] **Pattern Discovery (L4)** — contemporaneous + time-lagged correlations
 - [x] Cognitive Core — particle brain from a real mesh
-- [ ] Pattern Discovery (L4) — cross-signal correlations
 - [ ] More connectors — calendar · browser · documents · photos · GPS
 - [ ] Reality Interface (Frontend 1) — Home · Timeline · Life Graph · Knowledge Galaxy
 - [ ] Wire the particle brain to live `/brain/state`
