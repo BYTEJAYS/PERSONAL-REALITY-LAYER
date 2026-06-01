@@ -1,0 +1,80 @@
+name: prl
+
+services:
+  postgres:
+    image: pgvector/pgvector:pg16
+    container_name: prl-postgres
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-prl}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-prl}
+      POSTGRES_DB: ${POSTGRES_DB:-prl}
+    ports:
+      - "${POSTGRES_PORT:-5433}:5432"
+    volumes:
+      - prl_pgdata:/var/lib/postgresql/data
+      - ./backend/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-prl} -d ${POSTGRES_DB:-prl}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  neo4j:
+    image: neo4j:5
+    container_name: prl-neo4j
+    environment:
+      NEO4J_AUTH: ${NEO4J_USER:-neo4j}/${NEO4J_PASSWORD:-prlpassword}
+      NEO4J_PLUGINS: '["apoc"]'
+    ports:
+      - "${NEO4J_HTTP_PORT:-7474}:7474"
+      - "${NEO4J_BOLT_PORT:-7687}:7687"
+    volumes:
+      - prl_neo4j_data:/data
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:7474 || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    container_name: prl-redis
+    ports:
+      - "${REDIS_PORT:-6380}:6379"
+    volumes:
+      - prl_redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  api:
+    build: ./backend
+    container_name: prl-api
+    env_file: .env
+    environment:
+      # Inside the compose network, talk to services by name (not host ports).
+      DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-prl}:${POSTGRES_PASSWORD:-prl}@postgres:5432/${POSTGRES_DB:-prl}
+      NEO4J_URI: bolt://neo4j:7687
+      NEO4J_USER: ${NEO4J_USER:-neo4j}
+      NEO4J_PASSWORD: ${NEO4J_PASSWORD:-prlpassword}
+      REDIS_URL: redis://redis:6379/0
+    ports:
+      - "${API_PORT:-8000}:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      neo4j:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      # Live-reload during development; remove for a production image.
+      - ./backend/app:/srv/app:ro
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+
+volumes:
+  prl_pgdata:
+  prl_neo4j_data:
+  prl_redis_data:

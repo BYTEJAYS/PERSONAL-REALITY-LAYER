@@ -1,0 +1,31 @@
+from functools import lru_cache
+
+from pydantic_settings import BaseSettings, SettingsConfigDict
+
+
+class Settings(BaseSettings):
+    model_config = SettingsConfigDict(env_file=".env", extra="ignore")
+
+    # Postgres — canonical memories + pgvector. Default targets the compose
+    # service; override with DATABASE_URL for a host-side run against port 5433.
+    database_url: str = "postgresql+psycopg://prl:prl@localhost:5433/prl"
+
+    # Neo4j — the Life Graph.
+    neo4j_uri: str = "bolt://localhost:7687"
+    neo4j_user: str = "neo4j"
+    neo4j_password: str = "prlpassword"
+    # When false (e.g. Neo4j not up yet), graph writes are skipped, not fatal.
+    neo4j_enabled: bool = True
+
+    redis_url: str = "redis://localhost:6380/0"
+
+    embedding_provider: str = "local"  # "local" | "openai"
+    embedding_dim: int = 384
+    openai_api_key: str | None = None
+
+    cors_origins: list[str] = ["http://localhost:3000", "http://localhost:3001"]
+
+
+@lru_cache
+def get_settings() -> Settings:
+    return Settings()

@@ -1,0 +1,25 @@
+# --- Python / backend ---
+__pycache__/
+*.pyc
+.venv/
+venv/
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+
+# --- Node / frontend ---
+node_modules/
+.next/
+out/
+.turbo/
+next-env.d.ts
+*.tsbuildinfo
+
+# --- env / secrets ---
+.env
+.env.local
+.env*.local
+
+# --- os / editor ---
+.DS_Store
+*.log
