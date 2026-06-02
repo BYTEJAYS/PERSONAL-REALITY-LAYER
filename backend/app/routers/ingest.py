@@ -6,7 +6,8 @@ from sqlalchemy.orm import Session
 from .. import ingest_service
 from ..db import get_db
 from ..ingestion.git_ingest import ingest_repo
-from ..schemas import ConnectorRunIn, GitIngestIn
+from ..ingestion.text_ingest import ingest_text
+from ..schemas import ConnectorRunIn, GitIngestIn, TextIngestIn
 
 router = APIRouter(prefix="/ingest", tags=["ingest"])
 
@@ -45,3 +46,17 @@ def ingest_git(payload: GitIngestIn, db: Session = Depends(get_db)):
         raise HTTPException(status_code=400, detail=str(exc))
     except Exception as exc:  # surface git errors cleanly
         raise HTTPException(status_code=500, detail=f"git ingest failed: {exc}")
+
+
+@router.post("/text")
+def ingest_free_text(payload: TextIngestIn, db: Session = Depends(get_db)):
+    """Ingest free-text (a journal entry, brain-dump, reflection) as a memory.
+
+    Mines the text for goals (populating the goal region) and links any skills
+    or existing projects it mentions. This is the path for the self-reflective
+    'why' the you-model learns most from.
+    """
+    return ingest_text(
+        db, payload.text, source=payload.source,
+        title=payload.title, importance=payload.importance, emotion=payload.emotion,
+    )

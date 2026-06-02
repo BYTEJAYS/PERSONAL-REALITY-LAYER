@@ -16,9 +16,12 @@ from .. import (
     pattern_engine,
     personal_os,
     prediction_engine,
+    self_model,
     trend_engine,
+    you_model,
 )
 from ..db import get_db
+from ..schemas import DecideIn
 
 router = APIRouter(prefix="/cognitive", tags=["cognitive"])
 
@@ -99,3 +102,25 @@ def get_knowledge_graph(db: Session = Depends(get_db)):
 def get_learning(window_days: int = 30, db: Session = Depends(get_db)):
     """Learning model: per-concept knowledge, retention/decay, and learning status."""
     return learning_model.build(db, recent_window_days=window_days)
+
+
+@router.get("/self-model")
+def get_self_model(db: Session = Depends(get_db)):
+    """Self-Model: what you say about yourself, reconciled against what your behaviour shows."""
+    return self_model.build(db)
+
+
+@router.get("/you-model")
+def get_you_model(db: Session = Depends(get_db)):
+    """The You-Model: what you value, learned from your own behaviour (priors + revealed preference)."""
+    return you_model.build(db)
+
+
+@router.post("/decide")
+def post_decide(payload: DecideIn, db: Session = Depends(get_db)):
+    """Weigh options the way you would, using your learned value profile."""
+    weights = you_model.build(db).get("weights", {})
+    options = [{"name": o.name, **o.features} for o in payload.options]
+    result = you_model.decide(options, weights)
+    result["weights"] = weights
+    return result

@@ -20,7 +20,8 @@ def chat(payload: ChatIn, db: Session = Depends(get_db)):
     last month?", "When did I first get interested in machine learning?",
     "What projects am I neglecting?"
     """
-    ans = query_engine.ask(db, payload.message)
+    history = [{"role": t.role, "content": t.content} for t in payload.history]
+    ans = query_engine.ask(db, payload.message, history=history)
     return ChatOut(
         answer=ans.answer,
         intent=ans.intent,

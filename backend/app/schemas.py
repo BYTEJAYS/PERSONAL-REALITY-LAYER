@@ -70,8 +70,15 @@ class BrainState(BaseModel):
     neo4j: bool
 
 
+class ChatTurn(BaseModel):
+    role: str  # "user" | "assistant"
+    content: str
+
+
 class ChatIn(BaseModel):
     message: str
+    # Optional prior turns so the brain holds a conversation (most recent last).
+    history: list[ChatTurn] = []
 
 
 class ChatOut(BaseModel):
@@ -80,6 +87,17 @@ class ChatOut(BaseModel):
     llm_used: bool
     citations: list[dict]
     data: dict
+
+
+class DecideOption(BaseModel):
+    name: str
+    # Feature values in [0,1] on the You-Model axes (novelty, continuation,
+    # alignment, solo, depth, momentum, goal_fit). Omit any you don't know.
+    features: dict[str, float] = {}
+
+
+class DecideIn(BaseModel):
+    options: list[DecideOption]
 
 
 class ConnectorRunIn(BaseModel):
@@ -92,3 +110,11 @@ class GitIngestIn(BaseModel):
     project: str | None = None  # defaults to repo dir name
     limit: int = 500
     author_filter: str | None = None  # only commits whose author contains this
+
+
+class TextIngestIn(BaseModel):
+    text: str
+    source: str = "note"
+    title: str | None = None       # defaults to the first line
+    importance: float = 0.6
+    emotion: str | None = None

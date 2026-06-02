@@ -19,7 +19,7 @@ from dateutil.relativedelta import relativedelta
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session, selectinload
 
-from . import llm
+from . import llm, persona
 from .embeddings import embed
 from .models import Entity, Memory, MemoryEntity
 
@@ -39,6 +39,9 @@ class Answer:
     citations: list[Citation] = field(default_factory=list)
     data: dict = field(default_factory=dict)
     llm_used: bool = False
+    # Raw memory rows the handler actually used — internal, fed to the LLM so it
+    # reasons over real content (not just the deterministic summary). Not serialized.
+    sources: list = field(default_factory=list)
 
 
 def _now() -> datetime:
@@ -145,6 +148,7 @@ def _handle_day(db: Session, message: str, today: date, intent: str) -> Answer:
         citations=[_cite(m) for m in rows[:8]],
         data={"date": d.isoformat(), "count": len(rows),
               "projects": projects.most_common(5), "skills": skills.most_common(5)},
+        sources=rows[:8],
     )
 
 
@@ -209,6 +213,7 @@ def _handle_first_interest(db: Session, message: str) -> Answer:
         f"“{earliest.title}”.",
         "first_interest", citations=[_cite(earliest)],
         data={"topic": topic, "first_ts": earliest.ts.isoformat()},
+        sources=[earliest] + [m for m in rows[:5] if m is not earliest],
     )
 
 
@@ -224,18 +229,88 @@ def _handle_semantic(db: Session, message: str) -> Answer:
     return Answer(
         "Here's what I found related to your question:\n" + "\n".join(lines),
         "semantic", citations=[_cite(m) for m in rows],
+        sources=rows,
+    )
+
+
+# --- grounded reasoning -----------------------------------------------------
+def _entity_tag(m: Memory) -> str:
+    names = [link.entity.name for link in m.links][:6]
+    return f" [{', '.join(names)}]" if names else ""
+
+
+def _evidence_block(sources: list[Memory]) -> str:
+    """Render raw memory content the LLM can actually reason over (not just titles)."""
+    out = []
+    for i, m in enumerate(sources, 1):
+        body = (m.content or "").strip().replace("\n", " ")
+        if len(body) > 600:
+            body = body[:600] + "…"
+        out.append(
+            f"[{i}] {m.ts.strftime('%Y-%m-%d')} · {m.source} · {m.title}{_entity_tag(m)}"
+            + (f"\n    {body}" if body else "")
+        )
+    return "\n".join(out)
+
+
+def _reason(
+    db: Session, message: str, ans: Answer, history: list[dict] | None
+) -> None:
+    """If a model is reachable, have it reason over raw evidence in the user's voice.
+
+    Mutates `ans` in place. The deterministic answer (ans.answer) survives as the
+    fallback if no model is available or the call fails.
+    """
+    if not llm.available():
+        return
+
+    # Ensure the model has real content to reason over even for aggregate intents
+    # (time_spent / neglect retrieve no raw rows of their own).
+    sources = ans.sources or _retrieve(db, message, k=8)
+
+    parts = []
+    if history:
+        convo = "\n".join(
+            f"{h.get('role', 'user')}: {h.get('content', '')}" for h in history[-6:]
+        )
+        parts.append("Recent conversation:\n" + convo)
+    parts.append(f"Their question: {message}")
+    if ans.data:
+        parts.append(f"Pre-computed facts: {ans.data}")
+    if sources:
+        parts.append("Evidence from their memories:\n" + _evidence_block(sources))
+    else:
+        parts.append("Evidence from their memories: (none found)")
+    parts.append(
+        "Answer their question grounded ONLY in the evidence above. Cite the memories "
+        "you used by their date/title. If the evidence doesn't support an answer, say so."
+    )
+
+    phrased = llm.complete(persona.system_prompt(db), "\n\n".join(parts))
+    if phrased:
+        ans.answer = phrased
+        ans.llm_used = True
+        if sources and not ans.citations:
+            ans.citations = [_cite(m) for m in sources]
+
+
+def _retrieve(db: Session, message: str, k: int = 8) -> list[Memory]:
+    vec = embed(message)
+    return list(
+        db.execute(
+            select(Memory).options(selectinload(Memory.links))
+            .order_by(Memory.embedding.cosine_distance(vec)).limit(k)
+        ).scalars().all()
     )
 
 
 # --- public entrypoint ------------------------------------------------------
-_SYSTEM = (
-    "You are PRL, a person's second brain. Answer the user's question using ONLY "
-    "the evidence provided. Be concise and specific, cite concrete facts, and never "
-    "invent memories. If the evidence is thin, say so."
-)
-
-
-def ask(db: Session, message: str, today: date | None = None) -> Answer:
+def ask(
+    db: Session,
+    message: str,
+    today: date | None = None,
+    history: list[dict] | None = None,
+) -> Answer:
     today = today or _now().date()
     intent = classify(message)
 
@@ -250,15 +325,5 @@ def ask(db: Session, message: str, today: date | None = None) -> Answer:
     else:
         ans = _handle_semantic(db, message)
 
-    # If a model is reachable, let it phrase the grounded evidence naturally.
-    if llm.available():
-        evidence = ans.answer
-        if ans.citations:
-            evidence += "\n\nSupporting memories:\n" + "\n".join(
-                f"- [{c.ts[:10]}] {c.title} (source: {c.source})" for c in ans.citations
-            )
-        phrased = llm.complete(_SYSTEM, f"Question: {message}\n\nEvidence:\n{evidence}")
-        if phrased:
-            ans.answer = phrased
-            ans.llm_used = True
+    _reason(db, message, ans, history)
     return ans

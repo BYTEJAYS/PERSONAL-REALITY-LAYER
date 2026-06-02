@@ -19,8 +19,12 @@ class Settings(BaseSettings):
 
     redis_url: str = "redis://localhost:6380/0"
 
-    embedding_provider: str = "local"  # "local" | "openai"
+    # Semantic memory index. "sentence_transformers" = real local encoder
+    # (meaning-aware recall); "local" = hashing fallback (token-overlap only);
+    # "openai" = hosted, opt-in.
+    embedding_provider: str = "sentence_transformers"
     embedding_dim: int = 384
+    st_model: str = "sentence-transformers/all-MiniLM-L6-v2"
     openai_api_key: str | None = None
 
     # AI Chat layer. Local-first: talk to Ollama if it's running, otherwise the

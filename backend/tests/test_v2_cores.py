@@ -24,6 +24,71 @@ from app.blind_spots import (  # noqa: E402
 from app.personal_os import compose  # noqa: E402
 from app.knowledge_graph import build_graph  # noqa: E402
 from app.learning_model import model_concept, build_learning  # noqa: E402
+from app.you_model import (  # noqa: E402
+    trait_priors, learn_weights, decide, value_profile, FEATURES,
+)
+from app.self_model import extract_claims, reconcile  # noqa: E402
+
+
+def test_self_model_extracts_claims_with_polarity():
+    text = ("I work in bursts and can't show up daily. I keep starting things but I "
+            "abandon them and restart. I'm emotionally reactive and easily distracted.")
+    claims = {c.dimension: c for c in extract_claims(text)}
+    assert "consistency" in claims and claims["consistency"].polarity < 0
+    assert "follow_through" in claims and claims["follow_through"].polarity < 0
+    assert claims["follow_through"].quote  # carries a supporting sentence
+    print("self-claims:", {k: round(v.polarity, 2) for k, v in claims.items()})
+
+
+def test_self_model_reconcile_flags_survivorship_divergence():
+    # Self says "I never finish"; behaviour (git survivors) says high follow-through.
+    text = "I abandon projects, I never finish anything, I just restart."
+    claims = extract_claims(text)
+    findings = reconcile(claims, {"followthrough": 0.8})
+    div = next(f for f in findings if f.dimension == "follow_through")
+    assert div.kind == "divergence"
+    assert "survived into commits" in div.note  # surfaces the data bias
+    print("divergence:", div.note)
+
+
+def test_you_model_priors_reflect_traits():
+    traits = [
+        {"name": "curiosity", "label": "Highly curious", "score": 0.9},
+        {"name": "focus", "label": "Deep focuser", "score": 0.85},
+        {"name": "collaboration_preference", "label": "Independent", "score": 0.8},
+    ]
+    w = trait_priors(traits)
+    assert w["novelty"] > 0.3      # high curiosity → values novelty
+    assert w["depth"] > 0.3        # deep focuser → values depth
+    assert w["solo"] > 0           # independent → prefers solo
+    print("priors:", {k: round(v, 2) for k, v in w.items() if v})
+
+
+def test_you_model_learns_from_revealed_preference():
+    # Examples: high-continuation choices followed through, low ones didn't.
+    base = {f: 0.0 for f in FEATURES}
+    good = {**base, "continuation": 1.0, "momentum": 1.0}
+    bad = {**base, "continuation": 0.0, "momentum": 0.0}
+    examples = [(good, 0.9), (good, 0.85), (bad, 0.1), (bad, 0.05)]
+    priors = {f: 0.0 for f in FEATURES}
+    w, n_pairs, strength = learn_weights(examples, priors)
+    assert n_pairs >= 4
+    # It should have learned to reward continuation/momentum.
+    assert w["continuation"] > 0 and w["momentum"] > 0
+    print("learned:", {k: round(v, 2) for k, v in w.items() if abs(v) > 0.01}, "pairs:", n_pairs)
+
+
+def test_you_model_decide_ranks_by_value():
+    weights = {f: 0.0 for f in FEATURES}
+    weights["continuation"] = 1.0   # this person values finishing what they started
+    options = [
+        {"name": "Finish PRL", "continuation": 0.9, "novelty": 0.1},
+        {"name": "Start something new", "continuation": 0.0, "novelty": 0.9},
+    ]
+    out = decide(options, weights)
+    assert out["ready"] and out["recommendation"] == "Finish PRL"
+    assert out["ranking"][0]["utility"] > out["ranking"][1]["utility"]
+    print("decision:", out["recommendation"], out["lean"], "margin", out["margin"])
 
 
 def test_trajectories_cover_all_scenarios_and_horizons():

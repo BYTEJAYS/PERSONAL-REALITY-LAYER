@@ -9,3 +9,6 @@ neo4j==5.27.0
 redis==5.2.1
 python-dateutil==2.9.0.post0
 httpx==0.28.1
+# Real semantic embeddings (local, offline). torch is installed CPU-only in the
+# Dockerfile to keep the image lean — don't add a GPU torch pin here.
+sentence-transformers==3.3.1

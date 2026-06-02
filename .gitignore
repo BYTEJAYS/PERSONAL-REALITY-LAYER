@@ -23,6 +23,9 @@ next-env.d.ts
 # --- personal model output (derived from private repos) ---
 artifacts/
 
+# --- database backups (contain personal memories/reflections) ---
+backups/
+
 # --- os / editor ---
 .DS_Store
 *.log

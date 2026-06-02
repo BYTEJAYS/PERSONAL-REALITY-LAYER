@@ -60,6 +60,11 @@ services:
       NEO4J_USER: ${NEO4J_USER:-neo4j}
       NEO4J_PASSWORD: ${NEO4J_PASSWORD:-prlpassword}
       REDIS_URL: redis://redis:6379/0
+      # Reach Ollama running on the host (Mac/Windows Docker Desktop). The local
+      # voice/reasoning lights up automatically once `ollama serve` is running.
+      OLLAMA_URL: ${OLLAMA_URL:-http://host.docker.internal:11434}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     ports:
       - "${API_PORT:-8000}:8000"
     depends_on:
