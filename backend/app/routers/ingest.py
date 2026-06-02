@@ -3,11 +3,29 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
+from .. import ingest_service
 from ..db import get_db
 from ..ingestion.git_ingest import ingest_repo
-from ..schemas import GitIngestIn
+from ..schemas import ConnectorRunIn, GitIngestIn
 
 router = APIRouter(prefix="/ingest", tags=["ingest"])
+
+
+@router.get("/connectors")
+def list_connectors():
+    """All Layer-1 connectors and whether each can read on this machine."""
+    return ingest_service.list_connectors()
+
+
+@router.post("/run")
+def run_connector(payload: ConnectorRunIn, db: Session = Depends(get_db)):
+    """Run a connector (git/browser/files/shell) into the Memory Engine."""
+    try:
+        return ingest_service.run_connector(db, payload.connector, **payload.options)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"ingest failed: {exc}")
 
 
 @router.post("/git")

@@ -51,3 +51,36 @@ export async function fetchFocus(type: string, name: string): Promise<FocusResul
     return { nodes: [], edges: [] };
   }
 }
+
+export interface ChatCitation {
+  id?: string;
+  title?: string;
+  source?: string;
+  ts?: string;
+}
+
+export interface ChatReply {
+  answer: string;
+  intent: string;
+  llm_used: boolean;
+  citations: ChatCitation[];
+}
+
+// Ask the second brain. Throws if the backend is unreachable so the caller can
+// show a clear "backend offline" message (answers require Postgres + the API).
+export async function fetchChat(message: string, timeoutMs = 12000): Promise<ChatReply> {
+  const ctrl = new AbortController();
+  const t = setTimeout(() => ctrl.abort(), timeoutMs);
+  try {
+    const res = await fetch(`${API}/chat`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ message }),
+      signal: ctrl.signal,
+    });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    return (await res.json()) as ChatReply;
+  } finally {
+    clearTimeout(t);
+  }
+}

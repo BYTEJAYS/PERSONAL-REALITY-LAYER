@@ -55,5 +55,8 @@ def root():
         "docs": "/docs",
         "endpoints": ["/health", "/chat", "/insights", "/cognitive/model",
                       "/cognitive/predictions", "/cognitive/trends",
+                      "/cognitive/simulate", "/cognitive/chapters", "/cognitive/identity",
+                      "/cognitive/habits", "/cognitive/decisions", "/cognitive/blind-spots",
+                      "/cognitive/os", "/cognitive/knowledge-graph", "/cognitive/learning",
                       "/brain/state", "/memories", "/reconstruct/{day}", "/ingest/git"],
     }

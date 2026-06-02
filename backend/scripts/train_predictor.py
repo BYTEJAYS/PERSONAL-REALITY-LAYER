@@ -25,14 +25,24 @@ import train as ingest                               # noqa: E402
 
 
 def main(argv: list[str]) -> None:
-    repos = argv or ingest.discover_repos(os.path.expanduser("~"))
-    repos = [r for r in repos if os.path.basename(r) != "prl"]
-    mems = ingest.build_memories(repos)
+    sources = ["git"]
+    repos: list[str] = []
+    for a in argv:
+        if a.startswith("--sources="):
+            sources = [s.strip() for s in a.split("=", 1)[1].split(",") if s.strip()]
+        else:
+            repos.append(a)
+
+    print(f"   sources: {', '.join(sources)}")
+    mems = ingest.collect(sources, repos or None)
     if len(mems) < 10:
-        print(f"Need more history to train (have {len(mems)} commits).")
+        print(f"Need more history to train (have {len(mems)} memories).")
         return
 
-    X, y, dates = F.build_dataset(mems)
+    # Cap the timeline to recent days so a lone old event can't stretch the span
+    # over a long empty gap (degenerate split).
+    window = None if "--full-span" in argv else 90
+    X, y, dates = F.build_dataset(mems, window_days=window)
     n = len(X)
     pos = sum(y)
     base_rate = pos / n

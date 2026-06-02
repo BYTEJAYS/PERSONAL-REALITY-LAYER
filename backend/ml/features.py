@@ -72,9 +72,17 @@ def _features_for(day: date, idx: int, span: int, counts: dict[date, int]) -> li
     ]
 
 
-def build_dataset(mems: list[dict]) -> tuple[list[list[float]], list[int], list[date]]:
-    """X, y, dates over every day in the span. y=1 if the day had activity."""
+def build_dataset(mems: list[dict], window_days: int | None = None
+                  ) -> tuple[list[list[float]], list[int], list[date]]:
+    """X, y, dates over the span. y=1 if the day had activity.
+
+    `window_days` caps the timeline to the most recent N days, avoiding a
+    degenerate split when an old isolated event stretches the span over a long
+    empty gap (e.g. a 2023 commit + only recent browser history).
+    """
     counts, start, end = daily_counts(mems)
+    if window_days is not None:
+        start = max(start, end - timedelta(days=window_days))
     span = (end - start).days
     X: list[list[float]] = []
     y: list[int] = []

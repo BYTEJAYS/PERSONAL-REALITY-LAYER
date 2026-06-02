@@ -25,6 +25,7 @@ from datetime import datetime, timedelta, timezone
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 APP = os.path.join(HERE, os.pardir, "app")
+sys.path.insert(0, os.path.join(HERE, os.pardir))  # backend/ on path → import app.connectors
 
 
 def _load(name, path):
@@ -97,28 +98,42 @@ def classify_type(persons: int, has_project: bool, has_skill: bool) -> str:
     return "episodic"
 
 
-def build_memories(repos: list[str]) -> list[dict]:
-    mems = []
-    for path in repos:
-        project = os.path.basename(path.rstrip("/"))
-        for c in git_commits(path):
-            try:
-                ts = datetime.fromisoformat(c["date"])
-            except ValueError:
-                continue
-            text = f"{c['subject']}\n{c['body']}"
-            skills = extract.extract_skills(text)
-            mems.append({
-                "ts": ts,
-                "project": project,
-                "author": c["author"],
-                "skills": skills,
-                "importance": importance(c["subject"], c["body"]),
-                "title": c["subject"],
-                "memory_type": classify_type(1, True, bool(skills)),
-            })
+def _raw_to_dict(rm) -> dict:
+    skills = [e.name for e in rm.entities if e.type == "skill"]
+    project = next((e.name for e in rm.entities if e.type == "project"), rm.source)
+    author = next((e.name for e in rm.entities if e.type == "person"), "self")
+    return {"ts": rm.ts, "project": project, "author": author, "skills": skills,
+            "importance": rm.importance, "title": rm.title,
+            "memory_type": rm.memory_type or "episodic", "source": rm.source}
+
+
+def collect(sources=("git",), repos=None, browser_limit=40000) -> list[dict]:
+    """Pull normalized memories from any registered connectors."""
+    from app.connectors import registry
+    mems: list[dict] = []
+    for name in sources:
+        c = registry.get(name)
+        if not c:
+            print(f"   · {name}: unknown connector")
+            continue
+        if not c.available():
+            print(f"   · {name}: unavailable on this machine, skipped")
+            continue
+        opts: dict = {}
+        if name == "git":
+            opts["paths"] = repos
+        if name == "browser":
+            opts["limit"] = browser_limit
+        n0 = len(mems)
+        for rm in c.fetch(**opts):
+            mems.append(_raw_to_dict(rm))
+        print(f"   · {name}: +{len(mems) - n0} memories")
     mems.sort(key=lambda m: m["ts"])
     return mems
+
+
+def build_memories(repos: list[str] | None) -> list[dict]:
+    return collect(("git",), repos)
 
 
 # --- stats helpers ----------------------------------------------------------
@@ -322,16 +337,18 @@ def trends(mems, now):
 
 
 def main(argv):
-    repos = argv or discover_repos(os.path.expanduser("~"))
-    repos = [r for r in repos if os.path.basename(r) != "prl"]  # skip this repo itself
-    if not repos:
-        print("No git repositories found.")
-        return
+    sources = ["git"]
+    repos: list[str] = []
+    for a in argv:
+        if a.startswith("--sources="):
+            sources = [s.strip() for s in a.split("=", 1)[1].split(",") if s.strip()]
+        else:
+            repos.append(a)
 
-    print(f"\n⟳ Training cognitive model on {len(repos)} repositories…\n")
-    mems = build_memories(repos)
+    print(f"\n⟳ Training cognitive model — sources: {', '.join(sources)}\n")
+    mems = collect(sources, repos or None)
     if not mems:
-        print("No commits found.")
+        print("\nNo memories collected from the chosen sources.")
         return
     tz = mems[-1]["ts"].tzinfo
     now = _now(tz)

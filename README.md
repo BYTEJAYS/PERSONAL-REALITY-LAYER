@@ -40,7 +40,7 @@ PRL ingests the signals of a life — commits, locations, calendar, documents, c
 | 🔭 **Insight Engine** | Evidence-backed observations — peak hours, primary focus, neglected projects, collaboration payoff, momentum. *No data → no claim.* |
 | 🕰️ **Reality Reconstruction** | Rebuild any single day into a narrative from the memories that fall in it. |
 | 🧠 **Cognitive Core** | A particle brain sampled from a **real anatomical brain mesh**, R3F + custom GLSL — the visible representation of the evolving mind. |
-| 🔌 **Zero-key ingestion** | Seeds straight from your local `git log` — real commits become real memories, no API keys. |
+| 🔌 **Connector framework** | Pluggable, stdlib-only Layer-1 sources — git · browser history · documents · shell — feeding both the API and the offline trainer. Local-only, no keys. |
 
 ---
 
@@ -189,6 +189,8 @@ patterns · rising interests) and writes `artifacts/cognitive_twin.json`.
 | `GET  /reconstruct/{day}` | Narrative reconstruction of a single day |
 | `POST /memories` · `GET /memories` | Ingest / list & filter memories |
 | `GET  /memories/search?q=` | Semantic (vector) search |
+| `GET  /ingest/connectors` | List Layer-1 connectors + availability |
+| `POST /ingest/run` | Run a connector (git/browser/files/shell) into the engine |
 | `POST /ingest/git` | Ingest a local repo's history |
 | `GET  /brain/state` | Live cognitive-region intensities (drives the particles) |
 | `GET  /brain/focus?name=` | An entity's graph neighbourhood (the fly-through) |

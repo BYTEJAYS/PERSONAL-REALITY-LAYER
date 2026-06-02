@@ -72,6 +72,9 @@ services:
     volumes:
       # Live-reload during development; remove for a production image.
       - ./backend/app:/srv/app:ro
+      # Read-only view of the host so the seeder can read local git repos
+      # from inside the container (paths under /host/...).
+      - ${HOME}:/host:ro
     command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
 
 volumes:

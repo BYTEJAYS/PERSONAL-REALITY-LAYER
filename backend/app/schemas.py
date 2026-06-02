@@ -82,6 +82,11 @@ class ChatOut(BaseModel):
     data: dict
 
 
+class ConnectorRunIn(BaseModel):
+    connector: str
+    options: dict = {}
+
+
 class GitIngestIn(BaseModel):
     path: str
     project: str | None = None  # defaults to repo dir name
