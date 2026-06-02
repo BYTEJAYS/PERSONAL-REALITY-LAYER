@@ -1,0 +1,224 @@
+{
+  "trained_at": "2026-06-01T07:35:18.285187+00:00",
+  "profile": {
+    "memories": 43,
+    "repositories": 6,
+    "span_days": 907,
+    "first": "2023-12-05",
+    "last": "2026-06-01"
+  },
+  "memory_types": {
+    "episodic": 43
+  },
+  "traits": [
+    {
+      "name": "learning_style",
+      "label": "Hands-on builder",
+      "score": 1.0,
+      "confidence": 0.92,
+      "explanation": "100% of skill activity happens inside real projects."
+    },
+    {
+      "name": "persistence",
+      "label": "Exploratory",
+      "score": 0.046,
+      "confidence": 0.85,
+      "explanation": "Projects span 5 days avg; 1/6 gone quiet 3+ wks."
+    },
+    {
+      "name": "collaboration_preference",
+      "label": "Independent",
+      "score": 0.167,
+      "confidence": 0.85,
+      "explanation": "1/6 projects have multiple contributors."
+    },
+    {
+      "name": "curiosity",
+      "label": "Highly curious",
+      "score": 0.92,
+      "confidence": 0.92,
+      "explanation": "13 distinct skills, 13 active in the last 60 days."
+    },
+    {
+      "name": "focus_concentration",
+      "label": "Deep focuser",
+      "score": 0.674,
+      "confidence": 0.92,
+      "explanation": "Top project holds 67% of all activity."
+    },
+    {
+      "name": "attention_rhythm",
+      "label": "Night owl",
+      "score": 0.958,
+      "confidence": 0.92,
+      "explanation": "Activity concentrates around 23:00 (your local time)."
+    }
+  ],
+  "knowledge_distribution": [
+    {
+      "skill": "APIs",
+      "weight": 11.9,
+      "mentions": 18,
+      "last_seen": "2026-06-01"
+    },
+    {
+      "skill": "Python",
+      "weight": 10.0,
+      "mentions": 15,
+      "last_seen": "2026-06-01"
+    },
+    {
+      "skill": "Simulation",
+      "weight": 6.8,
+      "mentions": 10,
+      "last_seen": "2026-05-30"
+    },
+    {
+      "skill": "Fraud Detection",
+      "weight": 6.7,
+      "mentions": 9,
+      "last_seen": "2026-06-01"
+    },
+    {
+      "skill": "TypeScript",
+      "weight": 6.0,
+      "mentions": 8,
+      "last_seen": "2026-05-31"
+    },
+    {
+      "skill": "React",
+      "weight": 4.6,
+      "mentions": 7,
+      "last_seen": "2026-05-28"
+    },
+    {
+      "skill": "JavaScript",
+      "weight": 2.6,
+      "mentions": 4,
+      "last_seen": "2026-05-28"
+    },
+    {
+      "skill": "Three.js",
+      "weight": 2.1,
+      "mentions": 3,
+      "last_seen": "2026-05-28"
+    },
+    {
+      "skill": "Machine Learning",
+      "weight": 2.0,
+      "mentions": 3,
+      "last_seen": "2026-06-01"
+    },
+    {
+      "skill": "Docker",
+      "weight": 1.8,
+      "mentions": 3,
+      "last_seen": "2026-05-26"
+    },
+    {
+      "skill": "FastAPI",
+      "weight": 1.7,
+      "mentions": 3,
+      "last_seen": "2026-05-28"
+    },
+    {
+      "skill": "Graph",
+      "weight": 1.4,
+      "mentions": 2,
+      "last_seen": "2026-05-19"
+    }
+  ],
+  "patterns": [
+    {
+      "kind": "correlation",
+      "a": "activity",
+      "b": "productivity",
+      "r": 0.99,
+      "statement": "On days with more activity, you tend to do more productivity.",
+      "n": 11
+    },
+    {
+      "kind": "correlation",
+      "a": "activity",
+      "b": "learning",
+      "r": 0.95,
+      "statement": "On days with more activity, you tend to do more learning.",
+      "n": 11
+    },
+    {
+      "kind": "correlation",
+      "a": "activity",
+      "b": "building",
+      "r": 0.95,
+      "statement": "On days with more activity, you tend to do more building.",
+      "n": 11
+    },
+    {
+      "kind": "correlation",
+      "a": "productivity",
+      "b": "learning",
+      "r": 0.97,
+      "statement": "On days with more productivity, you tend to do more learning.",
+      "n": 11
+    },
+    {
+      "kind": "correlation",
+      "a": "productivity",
+      "b": "building",
+      "r": 0.97,
+      "statement": "On days with more productivity, you tend to do more building.",
+      "n": 11
+    },
+    {
+      "kind": "correlation",
+      "a": "learning",
+      "b": "building",
+      "r": 1.0,
+      "statement": "On days with more learning, you tend to do more building.",
+      "n": 11
+    },
+    {
+      "kind": "peak_window",
+      "window": [
+        10,
+        14
+      ],
+      "share": 0.38,
+      "statement": "Your productivity peaks between 10:00 and 14:00."
+    }
+  ],
+  "trends": {
+    "rising": [
+      {
+        "skill": "APIs",
+        "recent": 18,
+        "prior": 0
+      },
+      {
+        "skill": "Python",
+        "recent": 15,
+        "prior": 0
+      },
+      {
+        "skill": "Simulation",
+        "recent": 10,
+        "prior": 0
+      },
+      {
+        "skill": "Fraud Detection",
+        "recent": 9,
+        "prior": 0
+      },
+      {
+        "skill": "TypeScript",
+        "recent": 8,
+        "prior": 0
+      },
+      {
+        "skill": "React",
+        "recent": 7,
+        "prior": 0
+      }
+    ]
+  }
+}
