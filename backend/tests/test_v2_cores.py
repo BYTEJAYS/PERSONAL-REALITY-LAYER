@@ -52,6 +52,10 @@ from app.compressor import (  # noqa: E402
 from app.reconstructor import (  # noqa: E402
     deterministic_reconstruction, reconstruct_memory, reconstruction_fidelity,
 )
+from app.emotional_cortex import EmotionEvent, analyze as emo_analyze, valence  # noqa: E402
+from app.social_cortex import Interaction, analyze as social_analyze  # noqa: E402
+from app.behaviour_cortex import Activity, analyze as beh_analyze  # noqa: E402
+from app.time_machine import TimePoint, bucket, in_period  # noqa: E402
 
 
 def test_self_model_extracts_claims_with_polarity():
@@ -783,6 +787,78 @@ def test_reconstruction_empty_dna_is_safe():
     assert out["fidelity"] == 0.0
     assert "No preserved essence" in out["narrative"]
     assert deterministic_reconstruction({})  # does not crash
+
+
+# --- Cortexes V3: Emotional / Social / Behaviour ---------------------------
+def test_emotional_cortex_reads_mood_and_rising_stress():
+    now = _utc(2026, 6, 5)
+    # Mostly positive history, then a recent stressful cluster.
+    events = [EmotionEvent(_utc(2026, 1, d), "joy", 0.6) for d in range(1, 20)]
+    events += [EmotionEvent(_utc(2026, 6, d), "stress", 0.7) for d in range(1, 5)]
+    out = emo_analyze(events, today=now)
+    assert out["ready"] and out["mood"] == "positive"   # history dominates overall
+    assert out["stress"]["rising"] is True               # but recent window spikes
+    assert valence("joy") > 0 > valence("stress")
+    print("emotional:", out["mood"], "rising:", out["stress"]["rising"])
+
+
+def test_emotional_cortex_empty_is_safe():
+    assert emo_analyze([])["ready"] is False
+
+
+def test_social_cortex_ranks_closeness_and_flags_drift():
+    now = _utc(2026, 6, 5)
+    events = [Interaction("Mom", _utc(2026, 6, d), 0.8) for d in range(1, 5)]      # frequent+recent
+    events += [Interaction("OldFriend", _utc(2025, 1, d), 0.5) for d in range(1, 4)]  # gone quiet
+    out = social_analyze(events, today=now)
+    assert out["ready"] and out["inner_circle"][0] == "Mom"
+    drift_names = {d["person"] for d in out["drifting"]}
+    assert "OldFriend" in drift_names                     # >120d since last seen
+    print("social:", out["inner_circle"], "drifting:", list(drift_names))
+
+
+def test_behaviour_cortex_focus_window_uses_shared_rhythm():
+    now = _utc(2026, 6, 5)
+    acts = []
+    for day in range(1, 15):
+        for hr in (22, 23, 0, 1):                          # consistent night activity
+            acts.append(Activity(_utc(2026, 5, day, hr), 0.6, "git"))
+    out = beh_analyze(acts, today=now)
+    assert out["ready"] and out["focus_window"]["label"] == "Night owl"
+    assert out["active_days"] == 14
+    assert 0 < out["consistency"] <= 1
+    print("behaviour:", out["focus_window"], "consistency", out["consistency"])
+
+
+def test_behaviour_cortex_empty_is_safe():
+    assert beh_analyze([])["ready"] is False
+
+
+# --- Time Machine ----------------------------------------------------------
+def test_time_machine_buckets_each_scale():
+    pts = [
+        TimePoint(_utc(2019, 5, 1), "School play", 0.5),
+        TimePoint(_utc(2025, 12, 14), "Sister's wedding", 0.95),
+        TimePoint(_utc(2025, 12, 15), "Reception", 0.7),
+    ]
+    decades = bucket(pts, "decade")
+    assert {d["key"] for d in decades} == {"2010s", "2020s"}
+    months = bucket(pts, "month")
+    dec25 = next(m for m in months if m["key"] == "2025-12")
+    assert dec25["count"] == 2 and dec25["headline"] == "Sister's wedding"  # peak bubbles up
+    years = bucket(pts, "year")
+    assert years[0]["key"] == "2025"                       # newest first
+    assert len(in_period(pts, "year", "2025")) == 2
+    print("timemachine decades:", [d["key"] for d in decades])
+
+
+def test_time_machine_empty_and_bad_scale():
+    assert bucket([], "year") == []
+    try:
+        bucket([], "century")
+        assert False, "expected ValueError"
+    except ValueError:
+        pass
 
 
 if __name__ == "__main__":

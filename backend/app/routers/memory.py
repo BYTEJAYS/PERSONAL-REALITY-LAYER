@@ -11,7 +11,10 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 
-from .. import compressor, dedup, events, fractal, memory_aging, patterns, reconstructor
+from .. import (
+    compressor, dedup, events, fractal, memory_aging, patterns, reconstructor,
+    time_machine,
+)
 from ..db import get_db
 
 router = APIRouter(prefix="/memory", tags=["memory"])
@@ -69,3 +72,15 @@ def list_reconstructable(db: Session = Depends(get_db)):
 def reconstruct_one(memory_id: str, use_llm: bool = True, db: Session = Depends(get_db)):
     """Generatively recreate a rich recollection from a memory's compressed DNA."""
     return reconstructor.reconstruct(db, memory_id, use_llm=use_llm)
+
+
+@router.get("/timemachine")
+def time_machine_views(db: Session = Depends(get_db)):
+    """Time Machine: navigable day / month / year / decade views of the whole life."""
+    return time_machine.build(db)
+
+
+@router.get("/timemachine/{scale}/{key}")
+def time_machine_zoom(scale: str, key: str, db: Session = Depends(get_db)):
+    """Zoom into one period (e.g. scale=year key=2025) and list its memories."""
+    return time_machine.navigate(db, scale, key)

@@ -10,7 +10,10 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 
-from .. import family_cortex, finance_cortex, health_cortex
+from .. import (
+    behaviour_cortex, emotional_cortex, family_cortex, finance_cortex,
+    health_cortex, social_cortex,
+)
 from ..db import get_db
 
 router = APIRouter(prefix="/cortex", tags=["cortex"])
@@ -32,3 +35,21 @@ def get_health(db: Session = Depends(get_db)):
 def get_family(db: Session = Depends(get_db)):
     """Family Cortex: relationships, preserved stories/recipes, important dates + reminders."""
     return family_cortex.build(db)
+
+
+@router.get("/emotional")
+def get_emotional(db: Session = Depends(get_db)):
+    """Emotional Cortex: overall mood, emotion mix, mood timeline, stress trend."""
+    return emotional_cortex.build(db)
+
+
+@router.get("/social")
+def get_social(db: Session = Depends(get_db)):
+    """Social Cortex: interaction frequency, inner circle, drifting contacts."""
+    return social_cortex.build(db)
+
+
+@router.get("/behaviour")
+def get_behaviour(db: Session = Depends(get_db)):
+    """Behaviour Cortex: focus window, weekday profile, routine consistency."""
+    return behaviour_cortex.build(db)

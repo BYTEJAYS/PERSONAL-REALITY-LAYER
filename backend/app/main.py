@@ -63,8 +63,9 @@ def root():
                       "/cognitive/habits", "/cognitive/decisions", "/cognitive/blind-spots",
                       "/cognitive/os", "/cognitive/knowledge-graph", "/cognitive/learning",
                       "/cortex/finance", "/cortex/health", "/cortex/family",
+                      "/cortex/emotional", "/cortex/social", "/cortex/behaviour",
                       "/memory/events", "/memory/aging", "/memory/duplicates",
                       "/memory/patterns", "/memory/fractal", "/memory/compress",
-                      "/memory/reconstruct",
+                      "/memory/reconstruct", "/memory/timemachine",
                       "/brain/state", "/memories", "/reconstruct/{day}", "/ingest/git"],
     }
