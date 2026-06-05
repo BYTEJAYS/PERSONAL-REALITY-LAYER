@@ -1,0 +1,172 @@
+"""Companion mode — the discreet 'best friend who knows you' (Reality OS).
+
+This is the friend-facing voice of PRL. It is informed by 100% of the owner's
+data (it genuinely knows them), but it has a real friend's discretion: it never
+recites exact finances, medical readings, or quotes the owner's private
+self-analysis, and it softens details about third parties (family, friends) who
+never consented to being queried. It reasons from everything; it discloses
+carefully.
+
+Redaction happens BEFORE the model sees the evidence, so even a careless model
+cannot leak raw records. The LLM narrates when available; a deterministic, warm
+fallback answers otherwise. Pure helpers are DB-free and unit-testable.
+"""
+
+from __future__ import annotations
+
+import re
+from datetime import datetime, timezone
+
+# Sources whose RAW text must never be shown to friends (the owner's private inner life).
+PRIVATE_SOURCES = {"self-analysis", "journal", "diary", "reflection"}
+# Metadata domains carrying sensitive records — stripped from friend-facing evidence.
+SENSITIVE_META = ("finance", "health")
+
+_MONEY = re.compile(r"(₹|rs\.?|inr|\$)\s?[\d,]+(\.\d+)?", re.I)
+_MEDICAL = re.compile(r"\b\d+(\.\d+)?\s?(mg/dl|mg|bpm|kg|mmhg|%)\b", re.I)
+_BIGNUM = re.compile(r"\b\d{4,}\b")
+
+
+def _now() -> datetime:
+    return datetime.now(timezone.utc)
+
+
+def mask_numbers(text: str) -> str:
+    """Replace exact money / medical / large figures with qualitative placeholders."""
+    if not text:
+        return text
+    t = _MONEY.sub("[an amount]", text)
+    t = _MEDICAL.sub("[a reading]", t)
+    t = _BIGNUM.sub("[a number]", t)
+    return t
+
+
+def qualitative_money(savings_rate: float | None, trend: str | None) -> str:
+    """How a discreet friend describes someone's money situation — no figures."""
+    if savings_rate is None:
+        return "he doesn't really talk numbers, but he gets by"
+    if savings_rate >= 0.2:
+        return "he's been pretty comfortable lately"
+    if savings_rate >= 0.05:
+        return "he's managing — a bit careful with money but fine"
+    if trend == "rising":
+        return "money's a little tight right now, spending's crept up"
+    return "he's been a bit stretched lately, honestly"
+
+
+def redact_evidence(rows: list[dict]) -> list[dict]:
+    """Make retrieved memories safe to put in front of a friend-facing model."""
+    safe = []
+    for r in rows:
+        source = (r.get("source") or "").strip().lower()
+        if source in PRIVATE_SOURCES:
+            # Acknowledge it exists, never expose the words.
+            safe.append({"title": "(a private reflection)",
+                         "content": "Jay has worked through some personal feelings here.",
+                         "source": source})
+            continue
+        meta = {k: v for k, v in (r.get("meta") or {}).items() if k not in SENSITIVE_META}
+        safe.append({
+            "title": mask_numbers(r.get("title", "")),
+            "content": mask_numbers(r.get("content", "")),
+            "source": source,
+            "meta": meta,
+        })
+    return safe
+
+
+def disclosure_policy() -> str:
+    """System-prompt addendum that enforces a best-friend's discretion."""
+    return (
+        "You are speaking to Jay's FRIENDS as the close friend who knows him best. "
+        "You know everything about him, but you are discreet, the way a real best "
+        "friend is:\n"
+        "- Never state exact money amounts, account balances, or medical numbers.\n"
+        "- Never quote or paraphrase his private journal / self-analysis.\n"
+        "- Speak about his feelings, values and how he'd react warmly and honestly.\n"
+        "- Protect his family and friends — keep their details vague.\n"
+        "- If asked for something private and specific, gently deflect: that's his "
+        "to share. Be warm, real, first-name 'Jay', never clinical."
+    )
+
+
+def friend_system_prompt(persona_summary: str = "") -> str:
+    base = ("You are 'Jay's best friend' — a companion that deeply understands Jay: "
+            "his personality, emotions, values, and how he tends to react.")
+    if persona_summary:
+        base += f"\n\nWhat you know about Jay:\n{persona_summary}"
+    return base + "\n\n" + disclosure_policy()
+
+
+def compose_friend_answer(question: str, evidence: list[dict],
+                          mood: str | None = None) -> str:
+    """Deterministic, warm fallback answer when no model is reachable — grounded in
+    the (already redacted) evidence, never inventing specifics."""
+    titles = [e["title"] for e in evidence[:3] if e.get("title")]
+    bits = []
+    if mood:
+        bits.append(f"Honestly, Jay's been feeling pretty {mood} lately.")
+    if titles:
+        bits.append("From what I know of him — " + "; ".join(titles) + ".")
+    if not bits:
+        bits.append("I know Jay well, but I don't have much on that one. "
+                    "Ask me how he feels about something, or how he'd react.")
+    return " ".join(bits)
+
+
+# --- DB adapter -------------------------------------------------------------
+def ask(db, question: str, use_llm: bool = True) -> dict:
+    from sqlalchemy import select
+    from .models import Memory
+    from . import llm
+
+    # Retrieve a small, relevant slice (recent + simple keyword overlap), then redact.
+    rows = db.execute(
+        select(Memory.source, Memory.title, Memory.content, Memory.meta, Memory.emotion)
+        .order_by(Memory.ts.desc()).limit(40)
+    ).all()
+    q = question.lower()
+    scored = []
+    for source, title, content, meta, emotion in rows:
+        text = f"{title} {content}".lower()
+        overlap = sum(1 for w in set(q.split()) if len(w) > 3 and w in text)
+        scored.append((overlap, {"source": source, "title": title,
+                                 "content": content, "meta": meta}))
+    scored.sort(key=lambda s: -s[0])
+    evidence = redact_evidence([r for _, r in scored[:6]])
+
+    # Emotional read (qualitative).
+    mood = None
+    try:
+        from . import emotional_cortex
+        emo = emotional_cortex.build(db)
+        if emo.get("ready"):
+            mood = emo.get("mood")
+    except Exception:
+        pass
+
+    answer, by = None, "deterministic"
+    if use_llm and llm.available():
+        persona = ""
+        try:
+            from . import persona as persona_mod
+            persona = persona_mod.system_prompt(db)
+        except Exception:
+            pass
+        system = friend_system_prompt(persona)
+        ev_text = "\n".join(f"- {e['title']}: {e['content']}" for e in evidence)
+        out = llm.complete(system, f"A friend asks: {question}\n\nWhat you know:\n{ev_text}",
+                           temperature=0.6)
+        if out:
+            answer, by = out, "llm"
+    if not answer:
+        answer = compose_friend_answer(question, evidence, mood)
+
+    return {
+        "ready": True,
+        "generated_at": _now().isoformat(),
+        "question": question,
+        "answer": answer,
+        "generated_by": by,
+        "discretion": "applied",   # raw records were redacted before answering
+    }

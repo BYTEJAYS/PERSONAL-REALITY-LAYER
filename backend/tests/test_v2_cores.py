@@ -73,6 +73,11 @@ from app.self_evolution import adapt_weights, learned_priorities, weight_shift  
 from app.provenance import build_provenance, audit_trail  # noqa: E402
 from app.event_simulator import simulate, compare  # noqa: E402
 from app.thought_capture import classify_capture  # noqa: E402
+from app.companion import (  # noqa: E402
+    mask_numbers, qualitative_money, redact_evidence, disclosure_policy,
+    compose_friend_answer,
+)
+from app.auth import parse_tokens, classify_token  # noqa: E402
 
 
 def test_self_model_extracts_claims_with_polarity():
@@ -1086,6 +1091,56 @@ def test_thought_capture_classifies_kinds_and_goals():
     assert amb["kind"] == "ambition" and amb["goal"]
     assert classify_capture("")["kind"] == "empty"
     print("capture goal:", amb["goal"])
+
+
+# --- Companion mode: discretion / redaction --------------------------------
+def test_companion_masks_money_and_medical_numbers():
+    assert "[an amount]" in mask_numbers("spent ₹1,40,000 on a laptop")
+    assert "[a reading]" in mask_numbers("blood sugar was 96 mg/dL")
+    assert "[a number]" in mask_numbers("account 42317 balance")
+    # Ordinary words untouched.
+    assert "happy" in mask_numbers("he felt happy today")
+
+
+def test_companion_redacts_private_and_sensitive():
+    rows = [
+        {"source": "self-analysis", "title": "raw", "content": "brutal private truth",
+         "meta": {}},
+        {"source": "bank", "title": "Salary ₹90,000", "content": "credited 90000",
+         "meta": {"finance": [{"amount": 90000}]}},
+    ]
+    safe = redact_evidence(rows)
+    # Private reflection: words never exposed.
+    assert "brutal private truth" not in safe[0]["content"]
+    assert safe[0]["title"] == "(a private reflection)"
+    # Finance: numbers masked + raw finance meta stripped.
+    assert "90,000" not in safe[1]["title"] and "90000" not in safe[1]["content"]
+    assert "finance" not in safe[1]["meta"]
+
+
+def test_companion_money_stays_qualitative():
+    assert "comfortable" in qualitative_money(0.3, "steady")
+    assert "stretched" in qualitative_money(0.0, "rising") or "tight" in qualitative_money(0.0, "rising")
+    # Never leaks a figure.
+    for sr in (None, 0.0, 0.1, 0.5):
+        assert not any(ch.isdigit() for ch in qualitative_money(sr, "steady"))
+
+
+def test_companion_policy_and_fallback_are_safe():
+    pol = disclosure_policy()
+    assert "Never state exact money" in pol and "private journal" in pol
+    ans = compose_friend_answer("how is he?", [{"title": "trip to the hills"}], mood="content")
+    assert "Jay" in ans and "content" in ans
+
+
+# --- Companion mode: token auth --------------------------------------------
+def test_auth_token_roles():
+    friends = parse_tokens("alice123, bob456 ,")
+    assert friends == {"alice123", "bob456"}
+    assert classify_token("owner-secret", "owner-secret", friends) == "owner"
+    assert classify_token("alice123", "owner-secret", friends) == "friend"
+    assert classify_token("stranger", "owner-secret", friends) is None
+    assert classify_token(None, "owner-secret", friends) is None
 
 
 if __name__ == "__main__":

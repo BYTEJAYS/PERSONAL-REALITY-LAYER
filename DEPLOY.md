@@ -75,3 +75,48 @@ After seeding, every endpoint computes live from the cloud DB:
 (events, aging, timemachine, compress, reconstruct), and `/reality/*` (world,
 agents, simulate, evolution, …). The LLM steps stay deterministic unless you set
 `LLM_PROVIDER=anthropic` + `ANTHROPIC_API_KEY` (fine here — the data is fake).
+
+---
+
+# Friends Companion deployment (REAL data, friends-only)
+
+> This is the "a version of me my friends can talk to" build. It uses your REAL
+> data, but exposes only the discreet `/companion` voice to friends. Treat it as
+> a privacy-critical deployment.
+
+**How safety is enforced (already in the code):**
+- `OWNER_TOKEN` set ⇒ a middleware locks every raw endpoint (exact finances,
+  health, memories, provenance) to the owner. Friends physically cannot reach
+  them — only `/companion/*`.
+- `/companion` reasons from everything but **redacts before answering**: money &
+  medical numbers are masked, private journal/self-analysis is never quoted,
+  family/friends are kept vague (`companion.py`).
+- Each friend gets their own token, so you can revoke one without affecting others.
+
+**Env (API service):**
+
+| var | value |
+|-----|-------|
+| `OWNER_TOKEN` | a long random secret (you) |
+| `FRIEND_TOKENS` | `alice-xxxx,bob-yyyy,…` (one per friend) |
+| `LLM_PROVIDER` | `anthropic` |
+| `ANTHROPIC_API_KEY` | your key (needed for the companion to "talk like a friend"; Ollama isn't in cloud) |
+| `DATABASE_URL` | the demo/real Postgres (`+psycopg` driver) |
+| `NEO4J_ENABLED` | `false` |
+
+**Seeding with your real data (private — do this yourself, not on a shared box):**
+restore your dump or run `seed_from_repos`/`ingest/text` against the instance.
+Because `OWNER_TOKEN` gates ingestion, only you can load or update it.
+
+**Friends use it like:**
+```
+curl -X POST https://<api>/companion/ask \
+  -H "x-access-token: alice-xxxx" -H "content-type: application/json" \
+  -d '{"question":"how would Jay react if his startup failed?"}'
+```
+A friend hitting `/cortex/finance` or `/memories` gets `403 Owner access only`.
+
+**Still on you (not technical):** the people in your data (family, friends,
+doctor) didn't consent to being queried. The redaction softens their details, but
+consider telling the friends you invite what this is — and only invite people you
+trust with the real, unfiltered *you*.
