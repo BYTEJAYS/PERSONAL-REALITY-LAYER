@@ -109,15 +109,25 @@ def compose_friend_answer(question: str, evidence: list[dict],
                           mood: str | None = None) -> str:
     """Deterministic, warm fallback answer when no model is reachable — grounded in
     the (already redacted) evidence, never inventing specifics."""
-    titles = [e["title"] for e in evidence[:3] if e.get("title")]
+    if not evidence:
+        return (f"I'm {COMPANION_NAME} — I know {OWNER_NAME} well, but I don't have "
+                "much on that one. Ask me how he feels about something, or how he'd react.")
+    # Lead with the most relevant memory's actual content so the reply tracks the
+    # question (and varies with it), then tie in the next couple of related ones.
+    top = evidence[0]
+    detail = (top.get("content") or top.get("title") or "").strip()
+    snippet = " ".join(re.split(r"(?<=[.!?])\s+", detail)[:2])[:280].strip()
+    others = [e["title"] for e in evidence[1:3]
+              if e.get("title") and e["title"] != top.get("title")]
     bits = []
     if mood:
-        bits.append(f"Honestly, {OWNER_NAME}'s been feeling pretty {mood} lately.")
-    if titles:
-        bits.append("From what I know of him — " + "; ".join(titles) + ".")
-    if not bits:
-        bits.append(f"I'm {COMPANION_NAME} — I know {OWNER_NAME} well, but I don't have "
-                    "much on that one. Ask me how he feels about something, or how he'd react.")
+        bits.append(f"From what I know of {OWNER_NAME}, he's been in a fairly {mood} place lately.")
+    if snippet:
+        bits.append(f"On that — {snippet}")
+    elif top.get("title"):
+        bits.append(f"What comes to mind for {OWNER_NAME} is {top['title']}.")
+    if others:
+        bits.append("It ties into " + " and ".join(others) + ".")
     return " ".join(bits)
 
 
@@ -127,22 +137,32 @@ def ask(db, question: str, use_llm: bool = True) -> dict:
     from .models import Memory
     from . import llm
 
-    # Retrieve a small, relevant slice (recent + simple keyword overlap), then redact.
+    # Retrieve the memories most RELEVANT to the question via the pgvector
+    # embeddings, so different questions surface different evidence. (Keyword
+    # overlap alone returned the same recent rows for nearly every question —
+    # friend questions rarely share words with memory titles — which made Jerry
+    # repeat itself.) Falls back to recency if vector search is unavailable.
     # Quarantined / question rows are inert and must never reach an answer.
-    rows = db.execute(
-        select(Memory.source, Memory.title, Memory.content, Memory.meta, Memory.emotion)
+    from .embeddings import embed
+
+    base = (
+        select(Memory.source, Memory.title, Memory.content, Memory.meta)
         .where(Memory.source.notin_(("quarantine", "friend-question")))
-        .order_by(Memory.ts.desc()).limit(40)
-    ).all()
-    q = question.lower()
-    scored = []
-    for source, title, content, meta, emotion in rows:
-        text = f"{title} {content}".lower()
-        overlap = sum(1 for w in set(q.split()) if len(w) > 3 and w in text)
-        scored.append((overlap, {"source": source, "title": title,
-                                 "content": content, "meta": meta}))
-    scored.sort(key=lambda s: -s[0])
-    evidence = redact_evidence([r for _, r in scored[:6]])
+    )
+    rows = []
+    try:
+        qvec = embed(question)
+        rows = db.execute(
+            base.where(Memory.embedding.isnot(None))
+            .order_by(Memory.embedding.cosine_distance(qvec)).limit(6)
+        ).all()
+    except Exception:
+        rows = []
+    if not rows:  # no embeddings / vector search unavailable → recent slice
+        rows = db.execute(base.order_by(Memory.ts.desc()).limit(6)).all()
+    evidence = redact_evidence(
+        [{"source": s, "title": t, "content": c, "meta": m} for s, t, c, m in rows]
+    )
 
     # Emotional read (qualitative).
     mood = None
