@@ -84,3 +84,42 @@ export async function fetchChat(message: string, timeoutMs = 12000): Promise<Cha
     clearTimeout(t);
   }
 }
+
+// --- Companion (friends-only, token-gated) --------------------------------
+export interface CompanionReply {
+  answer: string;
+  generated_by: string; // "llm" | "deterministic"
+  discretion: string;
+}
+
+export interface ContributeReply {
+  status: string; // "quarantined" | "logged"
+  kind: string;
+  message: string;
+}
+
+async function companionPost<T>(path: string, token: string, body: object,
+                                timeoutMs = 30000): Promise<T> {
+  const ctrl = new AbortController();
+  const t = setTimeout(() => ctrl.abort(), timeoutMs);
+  try {
+    const res = await fetch(`${API}${path}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "x-access-token": token },
+      body: JSON.stringify(body),
+      signal: ctrl.signal,
+    });
+    if (res.status === 401 || res.status === 403) throw new Error("unauthorized");
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    return (await res.json()) as T;
+  } finally {
+    clearTimeout(t);
+  }
+}
+
+// Cloud Ollama can be slow on CPU — allow a generous timeout.
+export const askCompanion = (token: string, question: string) =>
+  companionPost<CompanionReply>("/companion/ask", token, { question });
+
+export const correctCompanion = (token: string, text: string, submitter: string) =>
+  companionPost<ContributeReply>("/companion/contribute", token, { text, submitter });

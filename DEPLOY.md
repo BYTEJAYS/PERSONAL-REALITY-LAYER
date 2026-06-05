@@ -99,10 +99,31 @@ agents, simulate, evolution, …). The LLM steps stay deterministic unless you s
 |-----|-------|
 | `OWNER_TOKEN` | a long random secret (you) |
 | `FRIEND_TOKENS` | `alice-xxxx,bob-yyyy,…` (one per friend) |
-| `LLM_PROVIDER` | `anthropic` |
-| `ANTHROPIC_API_KEY` | your key (needed for the companion to "talk like a friend"; Ollama isn't in cloud) |
+| `LLM_PROVIDER` | `ollama` (no API key — see Voice below) |
+| `OLLAMA_URL` | `http://ollama:11434` (the cloud Ollama service) |
+| `LLM_MODEL` | `llama3.2:3b` (realistic size for CPU inference) |
 | `DATABASE_URL` | the demo/real Postgres (`+psycopg` driver) |
 | `NEO4J_ENABLED` | `false` |
+
+**Voice — cloud Ollama, NO API key.** Run the open model on your own box next to
+the API. On a VPS:
+```
+LLM_MODEL=llama3.2:3b OLLAMA_URL=http://ollama:11434 \
+  docker compose --profile voice up -d --build
+```
+That starts an `ollama` service, pulls the model once into a persistent volume,
+and the API talks to it over the private network — zero keys, fully yours. (CPU
+inference of a 3B model is a few seconds per reply for a handful of friends; bump
+the box's RAM if it's tight. Railway can't run Ollama well — use a small VPS, e.g.
+Hetzner/DO, for the voice box.) If Ollama is ever unreachable, the companion falls
+back to grounded deterministic answers automatically.
+
+**Frontend — the Vercel link your friends use.** Deploy `frontend/` to Vercel
+with `NEXT_PUBLIC_API_URL=https://<api-domain>`. Share the **`/companion`** route:
+`https://<your-vercel-app>/companion`. Friends enter their name + access code
+(their `FRIEND_TOKENS` value), then chat. A "Correct / add info" toggle sends to
+the quarantine queue for your review. (The brain visual stays at `/`; the
+dashboard at `/dashboard` — those hit owner-gated endpoints, so keep them for you.)
 
 **Seeding with your real data (private — do this yourself, not on a shared box):**
 restore your dump or run `seed_from_repos`/`ingest/text` against the instance.

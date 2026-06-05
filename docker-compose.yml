@@ -82,7 +82,25 @@ services:
       - ${HOME}:/host:ro
     command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
 
+  # Local open LLM for the companion voice — NO API key. Opt-in:
+  #   LLM_MODEL=llama3.2:3b OLLAMA_URL=http://ollama:11434 \
+  #     docker compose --profile voice up -d --build
+  # Pulls the model on first start into a persistent volume. On a cloud box this
+  # is your "no-key" voice; a 3B model is the realistic size for CPU inference.
+  ollama:
+    image: ollama/ollama:latest
+    container_name: prl-ollama
+    profiles: ["voice"]
+    entrypoint: ["/bin/sh", "-c"]
+    command: >
+      "ollama serve & sleep 4 && ollama pull ${LLM_MODEL:-llama3.2:3b} && wait"
+    volumes:
+      - prl_ollama:/root/.ollama
+    ports:
+      - "${OLLAMA_PORT:-11434}:11434"
+
 volumes:
   prl_pgdata:
   prl_neo4j_data:
   prl_redis_data:
+  prl_ollama:
