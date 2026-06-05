@@ -55,26 +55,26 @@
 | 1 | Importance Engine | ✅ BUILT | `importance_engine.py` — 6-factor score (emotional/relationship/financial/historical/frequency/rarity) → `/reality/importance` |
 | 2 | Forgetting Engine | ✅ BUILT | `memory_aging.py` + `memory_economy.py` (drop policy) |
 | 3 | Confidence Engine | ✅ BUILT | `confidence_engine.py` — provenance-weighted trust → `/reality/confidence` |
-| 4 | Source Attribution | 🟡 PARTIAL | `confidence_engine.py` reads provenance; full per-fact source ledger pending |
+| 4 | Source Attribution | ✅ BUILT | `provenance.py` — per-memory source ledger + audit trail + coverage → `/reality/provenance` |
 | 5 | Memory Versioning | ✅ BUILT | `versioning.py` — temporal truth chains → `/reality/versioning` |
 | 6 | Temporal Knowledge Graph | 🟡 PARTIAL | `knowledge_graph.py` temporal DAG; per-edge time on Neo4j pending |
 | 7 | Curiosity Engine | ✅ BUILT | `curiosity_engine.py` — asks questions → `/reality/curiosity` |
 | 8 | Missing-Memory Detector | ✅ BUILT | `curiosity_engine.detect_gaps` |
 | 9 | Explainability Layer | ✅ BUILT | cross-cutting — every engine emits score+confidence+evidence |
-| 10 | Self-Evolution Engine | 🟡 PARTIAL | `you_model.py`, `self_model.py` learn the user; preference adaptation partial |
-| 11 | Multi-Agent Cognitive Society | 🟡 PARTIAL | the engines *are* the specialists; an orchestration layer is pending |
+| 10 | Self-Evolution Engine | ✅ BUILT | `self_evolution.py` — adapts importance weights to revealed preference → `/reality/evolution` |
+| 11 | Multi-Agent Cognitive Society | ✅ BUILT | `agents.py` — specialist roster + routing + council dispatch → `/reality/agents`,`/reality/ask` |
 | 12 | Reality Integrity Engine | ✅ BUILT | `confidence_engine.py` quarantine of low-confidence claims |
 | 13 | Memory Economy | ✅ BUILT | `memory_economy.py` — value = imp×conf×rel÷cost → `/reality/economy` |
-| 14 | Personal World Model | 🟡 PARTIAL | `brain.py` + `personal_os.py` aggregate; unified world object pending |
-| 15 | Event Simulator | 🟡 PARTIAL | `life_sim.py` trajectories + counterfactuals |
-| 16 | Dream/Thought Capture | 🟡 PARTIAL | `text_ingest.py` captures; dedicated quick-capture surface pending |
+| 14 | Personal World Model | ✅ BUILT | `world_model.py` — unified life-state across 9 domains + neglect → `/reality/world` |
+| 15 | Event Simulator | ✅ BUILT | `event_simulator.py` — what-if scenarios over current state → `/reality/simulate` |
+| 16 | Dream/Thought Capture | ✅ BUILT | `thought_capture.py` — classify + preserve fleeting ideas → `/reality/capture` |
 | 17 | Digital Executor | 🔴 GAP | generational inheritance — moonshot |
 | 18 | Collective Intelligence | 🔴 GAP | cross-user foundation models — moonshot |
 | 19 | Reality Compiler | ✅ BUILT | `reality_compiler.py` — raw→…→wisdom pipeline → `/reality/compile` |
 | 20 | Cognitive Compression Engine | ✅ BUILT | `compressor.py` |
 | 21 | Cognitive Information Theory | 🔵 RESEARCH | the discipline these modules collectively prototype |
 
-**Reality-OS score: 11 BUILT · 6 PARTIAL · 2 GAP · 1 research.**
+**Reality-OS score: 17 BUILT · 1 PARTIAL (#6 Temporal KG, needs Neo4j per-edge time) · 2 GAP (moonshots) · 1 research.**
 
 ## Known cross-cutting blockers
 - **Media ingestion** unlocks modules 1 & 11 fully — needs heavy deps (OCR/STT/vision models).

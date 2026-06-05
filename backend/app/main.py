@@ -71,5 +71,8 @@ def root():
                       "/memory/reconstruct", "/memory/timemachine",
                       "/reality/importance", "/reality/confidence", "/reality/economy",
                       "/reality/versioning", "/reality/curiosity", "/reality/compile",
+                      "/reality/world", "/reality/agents", "/reality/ask",
+                      "/reality/evolution", "/reality/provenance", "/reality/simulate",
+                      "/reality/capture",
                       "/brain/state", "/memories", "/reconstruct/{day}", "/ingest/git"],
     }

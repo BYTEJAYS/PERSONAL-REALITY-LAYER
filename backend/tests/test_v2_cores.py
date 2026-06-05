@@ -67,6 +67,12 @@ from app.curiosity_engine import (  # noqa: E402
     synthesize as curiosity_synthesize,
 )
 from app.reality_compiler import pipeline_report, STAGES  # noqa: E402
+from app.world_model import assemble_world, domain_status  # noqa: E402
+from app.agents import route, council, roster, AGENTS  # noqa: E402
+from app.self_evolution import adapt_weights, learned_priorities, weight_shift  # noqa: E402
+from app.provenance import build_provenance, audit_trail  # noqa: E402
+from app.event_simulator import simulate, compare  # noqa: E402
+from app.thought_capture import classify_capture  # noqa: E402
 
 
 def test_self_model_extracts_claims_with_polarity():
@@ -982,6 +988,104 @@ def test_reality_compiler_empty_is_safe():
     rep = pipeline_report({})
     assert rep["overall_compaction"] == 0.0
     assert all(s["count"] == 0 for s in rep["stages"])
+
+
+# --- Reality OS partials: Personal World Model -----------------------------
+def test_world_model_assembles_and_flags_neglect():
+    world = assemble_world({
+        "health": {"score": 0.8, "summary": "active"},
+        "finance": {"score": 0.5},
+        "social": {"score": 0.15},          # neglected
+        # emotional/behaviour/etc. missing -> unknown
+    })
+    assert domain_status(0.8) == "thriving"
+    assert domain_status(0.3) == "at_risk" and domain_status(0.15) == "neglected"
+    assert "health" in world["thriving"]
+    assert "social" in world["neglected"]
+    assert world["domains_known"] == 3 and world["domains_total"] == 9
+    assert 0 <= world["coherence"] <= 1
+    print("world coherence:", world["coherence"], "neglected:", world["neglected"])
+
+
+# --- Reality OS partials: Multi-Agent Society ------------------------------
+def test_agents_route_to_specialists():
+    fin = route("how much money did I spend on bills?")
+    assert fin and fin[0].name == "Finance"
+    mood = route("why do I feel so stressed lately?")
+    assert any(a.name == "Psychologist" for a in mood)
+    # Unmatched query still convenes a non-empty senior council.
+    panel = council("xyzzy nonsense")
+    assert len(panel) == 3
+    assert len(roster()) == len(AGENTS)
+
+
+# --- Reality OS partials: Self-Evolution -----------------------------------
+def test_self_evolution_shifts_weights_toward_preference():
+    # User consistently treats relationship-heavy memories as important.
+    examples = []
+    for _ in range(20):
+        examples.append(({"emotional": 0.1, "relationship": 1.0, "financial": 0.0,
+                          "historical": 0.1, "frequency": 0.1, "rarity": 0.1}, 1.0))
+        examples.append(({"emotional": 0.1, "relationship": 0.0, "financial": 0.1,
+                          "historical": 0.1, "frequency": 0.1, "rarity": 0.1}, 0.0))
+    evolved = adapt_weights(examples)
+    assert abs(sum(evolved.values()) - 1.0) < 1e-6        # stays a valid distribution
+    assert "relationship" in learned_priorities(evolved)   # learned what they value
+    assert weight_shift(dict.fromkeys(evolved, 0.0), evolved)["relationship"] > 0
+
+
+def test_self_evolution_no_data_keeps_priors():
+    from app.importance_engine import WEIGHTS
+    evolved = adapt_weights([])
+    assert abs(sum(evolved.values()) - 1.0) < 1e-6
+    # With no examples it returns the (normalised) base weights unchanged in rank.
+    assert learned_priorities(evolved)[0] == learned_priorities(_normalise_like(WEIGHTS))[0]
+
+
+def _normalise_like(w):
+    s = sum(w.values())
+    return {k: v / s for k, v in w.items()}
+
+
+# --- Reality OS partials: Source Attribution -------------------------------
+def test_provenance_auditable_needs_two_distinct_sources():
+    single = build_provenance([{"type": "note", "ref": "n1", "ts": "2025-01-01"}])
+    assert single["auditable"] is False
+    multi = build_provenance([
+        {"type": "invoice", "ref": "i1", "ts": "2028-03-01"},
+        {"type": "bank", "ref": "b1", "ts": "2028-03-02"},
+    ])
+    assert multi["auditable"] is True and multi["distinct_types"] == 2
+    assert "invoice" in audit_trail(multi)
+    assert build_provenance([])["auditable"] is False
+    print("provenance:", multi["summary"])
+
+
+# --- Reality OS partials: Event Simulator ----------------------------------
+def test_event_simulator_projects_tradeoffs():
+    state = {"finance": 0.6, "social": 0.6, "behaviour": 0.6, "emotional": 0.6,
+             "projects": 0.4, "knowledge": 0.5, "health": 0.6}
+    res = simulate(state, "start_company")
+    assert res["ready"]
+    assert "projects" in res["gains"] and "finance" in res["losses"]
+    assert res["after"]["projects"] > res["before"]["projects"]
+    # Ranking favours higher confidence-weighted benefit.
+    ranked = compare(state)
+    assert ranked and ranked == sorted(ranked, key=lambda r: -r["score"])
+    assert simulate(state, "nope")["ready"] is False
+    print("simulate ranks:", [r["scenario"] for r in ranked[:3]])
+
+
+# --- Reality OS partials: Dream/Thought Capture ----------------------------
+def test_thought_capture_classifies_kinds_and_goals():
+    assert classify_capture("I dreamt I was flying over the sea")["kind"] == "dream"
+    assert classify_capture("What if memory could be compiled?")["kind"] == "question"
+    todo = classify_capture("Need to call the bank today")
+    assert todo["kind"] == "todo" and todo["urgency"] == "high"
+    amb = classify_capture("I want to build a company that preserves human memory")
+    assert amb["kind"] == "ambition" and amb["goal"]
+    assert classify_capture("")["kind"] == "empty"
+    print("capture goal:", amb["goal"])
 
 
 if __name__ == "__main__":
