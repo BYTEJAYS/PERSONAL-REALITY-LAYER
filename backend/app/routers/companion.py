@@ -67,8 +67,10 @@ def review(body: ReviewIn, role: str = Depends(require_owner), db: Session = Dep
 def about(role: str = Depends(require_companion)):
     """What this companion is, and what it will and won't share."""
     return {
-        "name": "Jay's companion",
-        "knows": "Jay's personality, emotions, values, story and how he tends to react.",
+        "name": companion.COMPANION_NAME,
+        "is": f"{companion.OWNER_NAME}'s companion",
+        "knows": f"{companion.OWNER_NAME}'s personality, emotions, values, story and "
+                 "how he tends to react.",
         "discretion": [
             "won't share exact finances or account balances",
             "won't share medical numbers",

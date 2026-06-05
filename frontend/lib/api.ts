@@ -117,9 +117,55 @@ async function companionPost<T>(path: string, token: string, body: object,
   }
 }
 
-// Cloud Ollama can be slow on CPU — allow a generous timeout.
-export const askCompanion = (token: string, question: string) =>
-  companionPost<CompanionReply>("/companion/ask", token, { question });
+// Demo mode (NEXT_PUBLIC_DEMO=1): canned, realistic answers so the experience can
+// be previewed with no backend / DB / LLM. Clearly fictional placeholder content.
+const DEMO = process.env.NEXT_PUBLIC_DEMO === "1";
 
-export const correctCompanion = (token: string, text: string, submitter: string) =>
-  companionPost<ContributeReply>("/companion/contribute", token, { text, submitter });
+const DEMO_ANSWERS: { match: RegExp; answer: string }[] = [
+  { match: /who are you|your name|what are you|who r u/i,
+    answer: "I'm Jerry — Jay's companion. Think of me as the friend who knows Jay best: how he thinks, how he feels, how he'd react. I'll tell you about him, but the private stuff stays private." },
+  { match: /fail|failure|lose|lost|reject/i,
+    answer: "Honestly? Jay takes failure hard for about a day — he goes quiet, replays it. Then something flips and he channels it straight into the next thing. He's more resilient than he gives himself credit for; the comeback is usually faster than the sulk." },
+  { match: /money|broke|spend|afford|rich|poor/i,
+    answer: "He's careful but not stingy — managing fine lately. He'd rather invest in something he's building than splurge. I'll leave the exact numbers to him, though." },
+  { match: /stress|anxious|pressure|overwhelm|worried/i,
+    answer: "Under pressure Jay gets really focused and a bit nocturnal — he'll disappear into the work at night. The tell is he stops replying to texts. Give him space and he resurfaces." },
+  { match: /love|crush|relationship|girl|date/i,
+    answer: "That's firmly his to tell, not mine. What I'll say is he's loyal and feels things deeply, even when he plays it cool." },
+  { match: /angry|mad|upset|conflict|fight/i,
+    answer: "He doesn't blow up — he goes calm and quiet, which is actually the sign he's hurt. He needs a real conversation, not a quick sorry." },
+  { match: /happy|joy|excited|best/i,
+    answer: "When he's building something that's clicking, he's genuinely lit up — that's his happiest. Late nights, music on, in flow." },
+];
+
+const DEMO_DEFAULT =
+  "I'm Jerry — I know Jay pretty well. He's a builder: curious, deep-focused, a night owl who throws himself into projects. Ask me how he'd react to something, or what he cares about.";
+
+function demoAnswer(question: string): CompanionReply {
+  const hit = DEMO_ANSWERS.find((d) => d.match.test(question));
+  return { answer: hit ? hit.answer : DEMO_DEFAULT, generated_by: "demo", discretion: "applied" };
+}
+
+function delay<T>(v: T, ms: number): Promise<T> {
+  return new Promise((r) => setTimeout(() => r(v), ms));
+}
+
+// Cloud Ollama can be slow on CPU — allow a generous timeout.
+export async function askCompanion(token: string, question: string): Promise<CompanionReply> {
+  if (DEMO) return delay(demoAnswer(question), 900); // simulate "thinking"
+  return companionPost<CompanionReply>("/companion/ask", token, { question });
+}
+
+export async function correctCompanion(
+  token: string,
+  text: string,
+  submitter: string,
+): Promise<ContributeReply> {
+  if (DEMO)
+    return delay(
+      { status: "quarantined", kind: "fact",
+        message: "Thanks! I've passed that to Jay to confirm before I treat it as something I know about him." },
+      700,
+    );
+  return companionPost<ContributeReply>("/companion/contribute", token, { text, submitter });
+}

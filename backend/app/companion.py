@@ -17,6 +17,10 @@ from __future__ import annotations
 import re
 from datetime import datetime, timezone
 
+# PRL's companion identity. JERRY is derived from the owner's name, JAY.
+COMPANION_NAME = "Jerry"
+OWNER_NAME = "Jay"
+
 # Sources whose RAW text must never be shown to friends (the owner's private inner life).
 PRIVATE_SOURCES = {"self-analysis", "journal", "diary", "reflection"}
 # Metadata domains carrying sensitive records — stripped from friend-facing evidence.
@@ -78,23 +82,26 @@ def redact_evidence(rows: list[dict]) -> list[dict]:
 def disclosure_policy() -> str:
     """System-prompt addendum that enforces a best-friend's discretion."""
     return (
-        "You are speaking to Jay's FRIENDS as the close friend who knows him best. "
+        f"You are speaking to {OWNER_NAME}'s FRIENDS as the one who knows him best. "
         "You know everything about him, but you are discreet, the way a real best "
         "friend is:\n"
+        f"- Your name is {COMPANION_NAME}; if asked who you are, say you're "
+        f"{OWNER_NAME}'s companion.\n"
         "- Never state exact money amounts, account balances, or medical numbers.\n"
         "- Never quote or paraphrase his private journal / self-analysis.\n"
         "- Speak about his feelings, values and how he'd react warmly and honestly.\n"
         "- Protect his family and friends — keep their details vague.\n"
         "- If asked for something private and specific, gently deflect: that's his "
-        "to share. Be warm, real, first-name 'Jay', never clinical."
+        f"to share. Be warm, real, refer to him as '{OWNER_NAME}', never clinical."
     )
 
 
 def friend_system_prompt(persona_summary: str = "") -> str:
-    base = ("You are 'Jay's best friend' — a companion that deeply understands Jay: "
-            "his personality, emotions, values, and how he tends to react.")
+    base = (f"You are {COMPANION_NAME} — {OWNER_NAME}'s companion, an AI who deeply "
+            f"understands {OWNER_NAME}: his personality, emotions, values, and how he "
+            f"tends to react. You always identify yourself as {COMPANION_NAME}.")
     if persona_summary:
-        base += f"\n\nWhat you know about Jay:\n{persona_summary}"
+        base += f"\n\nWhat you know about {OWNER_NAME}:\n{persona_summary}"
     return base + "\n\n" + disclosure_policy()
 
 
@@ -105,12 +112,12 @@ def compose_friend_answer(question: str, evidence: list[dict],
     titles = [e["title"] for e in evidence[:3] if e.get("title")]
     bits = []
     if mood:
-        bits.append(f"Honestly, Jay's been feeling pretty {mood} lately.")
+        bits.append(f"Honestly, {OWNER_NAME}'s been feeling pretty {mood} lately.")
     if titles:
         bits.append("From what I know of him — " + "; ".join(titles) + ".")
     if not bits:
-        bits.append("I know Jay well, but I don't have much on that one. "
-                    "Ask me how he feels about something, or how he'd react.")
+        bits.append(f"I'm {COMPANION_NAME} — I know {OWNER_NAME} well, but I don't have "
+                    "much on that one. Ask me how he feels about something, or how he'd react.")
     return " ".join(bits)
 
 

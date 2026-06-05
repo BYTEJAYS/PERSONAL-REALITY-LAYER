@@ -1,12 +1,14 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { BrainCanvas } from "@/components/BrainCanvas";
 import { askCompanion, correctCompanion } from "@/lib/api";
 
 type Msg = { who: "you" | "jay" | "system"; text: string };
 
 const TOKEN_KEY = "prl_companion_token";
 const NAME_KEY = "prl_companion_name";
+const DEMO = process.env.NEXT_PUBLIC_DEMO === "1";
 
 export default function CompanionPage() {
   const [token, setToken] = useState("");
@@ -20,7 +22,6 @@ export default function CompanionPage() {
   const [busy, setBusy] = useState(false);
   const endRef = useRef<HTMLDivElement>(null);
 
-  // Restore a saved access code so friends don't re-enter it each visit.
   useEffect(() => {
     const t = localStorage.getItem(TOKEN_KEY);
     const n = localStorage.getItem(NAME_KEY);
@@ -37,15 +38,15 @@ export default function CompanionPage() {
 
   function enter(e: React.FormEvent) {
     e.preventDefault();
-    if (!token.trim() || !name.trim()) return;
-    localStorage.setItem(TOKEN_KEY, token.trim());
+    if (!name.trim() || (!token.trim() && !DEMO)) return;
+    localStorage.setItem(TOKEN_KEY, token.trim() || "demo");
     localStorage.setItem(NAME_KEY, name.trim());
     setReady(true);
     setMsgs([
       {
         who: "system",
         text:
-          "This is Jay's companion — it knows him well and speaks for him, but keeps his private stuff private. Ask anything, or switch to “correct” if it gets something wrong (Jay reviews corrections before he learns them).",
+          "Hey, I’m Jerry — Jay’s companion. I know him well and speak for him, but I keep his private stuff private. Ask me anything, or switch to “correct” if I get something wrong (Jay reviews corrections before I learn them).",
       },
     ]);
   }
@@ -80,7 +81,7 @@ export default function CompanionPage() {
       } else {
         setMsgs((m) => [
           ...m,
-          { who: "system", text: "Couldn't reach the companion just now — try again in a moment." },
+          { who: "system", text: "Couldn’t reach the companion just now — try again in a moment." },
         ]);
       }
     } finally {
@@ -91,131 +92,135 @@ export default function CompanionPage() {
   // --- Access gate ----------------------------------------------------------
   if (!ready) {
     return (
-      <main className="min-h-screen flex items-center justify-center bg-[#0a0a0f] text-zinc-100 px-4">
-        <form onSubmit={enter} className="w-full max-w-sm space-y-4">
-          <div className="space-y-1 text-center">
-            <h1 className="text-2xl font-semibold">Talk to Jay</h1>
-            <p className="text-sm text-zinc-400">A companion that knows him. Friends only.</p>
-          </div>
-          {authError && (
-            <p className="text-sm text-red-400 text-center">That access code didn’t work.</p>
-          )}
-          <input
-            className="w-full rounded-lg bg-zinc-900 border border-zinc-800 px-3 py-2 outline-none focus:border-indigo-500"
-            placeholder="Your name"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-          />
-          <input
-            className="w-full rounded-lg bg-zinc-900 border border-zinc-800 px-3 py-2 outline-none focus:border-indigo-500"
-            placeholder="Access code (Jay gave you one)"
-            value={token}
-            onChange={(e) => setToken(e.target.value)}
-          />
-          <button
-            type="submit"
-            className="w-full rounded-lg bg-indigo-600 hover:bg-indigo-500 py-2 font-medium transition"
+      <main className="relative h-screen w-screen overflow-hidden bg-[#040507] text-zinc-100">
+        <BrainCanvas />
+        <div className="absolute inset-0 flex items-center justify-center px-4">
+          <form
+            onSubmit={enter}
+            className="w-full max-w-sm space-y-4 rounded-2xl border border-white/10 bg-black/50 p-6 backdrop-blur-md"
           >
-            Enter
-          </button>
-        </form>
+            <div className="space-y-1 text-center">
+              <h1 className="text-2xl font-semibold">Meet Jerry</h1>
+              <p className="text-sm text-zinc-400">Jay’s companion — knows him, keeps his secrets. Friends only.</p>
+            </div>
+            {authError && (
+              <p className="text-center text-sm text-red-400">That access code didn’t work.</p>
+            )}
+            <input
+              className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 outline-none focus:border-indigo-400"
+              placeholder="Your name"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+            />
+            <input
+              className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 outline-none focus:border-indigo-400"
+              placeholder={DEMO ? "Access code (any, in demo)" : "Access code (Jay gave you one)"}
+              value={token}
+              onChange={(e) => setToken(e.target.value)}
+            />
+            <button
+              type="submit"
+              className="w-full rounded-lg bg-indigo-600 py-2 font-medium transition hover:bg-indigo-500"
+            >
+              Enter
+            </button>
+            {DEMO && <p className="text-center text-xs text-amber-400/80">demo mode — sample answers</p>}
+          </form>
+        </div>
       </main>
     );
   }
 
-  // --- Chat -----------------------------------------------------------------
+  // --- Brain + chat overlay -------------------------------------------------
   return (
-    <main className="min-h-screen flex flex-col bg-[#0a0a0f] text-zinc-100">
-      <header className="flex items-center justify-between px-4 py-3 border-b border-zinc-900">
+    <main className="relative h-screen w-screen overflow-hidden bg-[#040507] text-zinc-100">
+      <BrainCanvas />
+
+      {/* top bar */}
+      <header className="absolute left-0 right-0 top-0 z-10 flex items-center justify-between px-5 py-3">
         <div>
-          <h1 className="font-semibold leading-tight">Jay’s companion</h1>
-          <p className="text-xs text-zinc-500">Hi {name} · knows Jay, keeps his secrets</p>
+          <h1 className="font-semibold leading-tight">Jerry {DEMO && <span className="text-amber-400/80 text-xs">· demo</span>}</h1>
+          <p className="text-xs text-zinc-500">Hi {name} · Jay’s companion — knows him, keeps his secrets</p>
         </div>
         <button onClick={signOut} className="text-xs text-zinc-500 hover:text-zinc-300">
           sign out
         </button>
       </header>
 
-      <div className="flex-1 overflow-y-auto px-4 py-4 space-y-3 max-w-2xl w-full mx-auto">
-        {msgs.map((m, i) => (
-          <div
-            key={i}
-            className={
-              m.who === "you"
-                ? "flex justify-end"
-                : m.who === "system"
-                ? "flex justify-center"
-                : "flex justify-start"
-            }
-          >
-            <div
-              className={
-                m.who === "you"
-                  ? "max-w-[80%] rounded-2xl bg-indigo-600 px-4 py-2"
-                  : m.who === "system"
-                  ? "max-w-[90%] rounded-lg bg-zinc-900/60 text-zinc-400 text-xs px-3 py-2 text-center"
-                  : "max-w-[80%] rounded-2xl bg-zinc-900 border border-zinc-800 px-4 py-2"
-              }
-            >
-              {m.text}
-            </div>
+      {/* chat overlay docked bottom; brain stays interactive above it */}
+      <div className="pointer-events-none absolute inset-x-0 bottom-0 z-10 flex justify-center px-3 pb-3">
+        <div className="pointer-events-auto flex w-full max-w-xl flex-col rounded-2xl border border-white/10 bg-black/50 backdrop-blur-md">
+          <div className="max-h-[46vh] space-y-2 overflow-y-auto px-4 pt-4">
+            {msgs.map((m, i) => (
+              <div
+                key={i}
+                className={
+                  m.who === "you"
+                    ? "flex justify-end"
+                    : m.who === "system"
+                    ? "flex justify-center"
+                    : "flex justify-start"
+                }
+              >
+                <div
+                  className={
+                    m.who === "you"
+                      ? "max-w-[80%] rounded-2xl bg-indigo-600 px-4 py-2 text-sm"
+                      : m.who === "system"
+                      ? "max-w-[92%] rounded-lg bg-white/5 px-3 py-2 text-center text-xs text-zinc-400"
+                      : "max-w-[80%] rounded-2xl border border-white/10 bg-white/5 px-4 py-2 text-sm"
+                  }
+                >
+                  {m.text}
+                </div>
+              </div>
+            ))}
+            {busy && (
+              <div className="flex justify-start">
+                <div className="rounded-2xl border border-white/10 bg-white/5 px-4 py-2 text-sm text-zinc-500">
+                  {mode === "ask" ? "thinking…" : "noting that…"}
+                </div>
+              </div>
+            )}
+            <div ref={endRef} />
           </div>
-        ))}
-        {busy && (
-          <div className="flex justify-start">
-            <div className="rounded-2xl bg-zinc-900 border border-zinc-800 px-4 py-2 text-zinc-500">
-              {mode === "ask" ? "thinking…" : "noting that…"}
-            </div>
-          </div>
-        )}
-        <div ref={endRef} />
-      </div>
 
-      <form onSubmit={send} className="border-t border-zinc-900 px-4 py-3 max-w-2xl w-full mx-auto">
-        <div className="mb-2 flex gap-2 text-xs">
-          <button
-            type="button"
-            onClick={() => setMode("ask")}
-            className={`rounded-full px-3 py-1 ${
-              mode === "ask" ? "bg-indigo-600" : "bg-zinc-900 text-zinc-400"
-            }`}
-          >
-            Ask about Jay
-          </button>
-          <button
-            type="button"
-            onClick={() => setMode("correct")}
-            className={`rounded-full px-3 py-1 ${
-              mode === "correct" ? "bg-amber-600" : "bg-zinc-900 text-zinc-400"
-            }`}
-          >
-            Correct / add info
-          </button>
+          <form onSubmit={send} className="p-3">
+            <div className="mb-2 flex gap-2 text-xs">
+              <button
+                type="button"
+                onClick={() => setMode("ask")}
+                className={`rounded-full px-3 py-1 ${mode === "ask" ? "bg-indigo-600" : "bg-white/5 text-zinc-400"}`}
+              >
+                Ask about Jay
+              </button>
+              <button
+                type="button"
+                onClick={() => setMode("correct")}
+                className={`rounded-full px-3 py-1 ${mode === "correct" ? "bg-amber-600" : "bg-white/5 text-zinc-400"}`}
+              >
+                Correct / add info
+              </button>
+            </div>
+            <div className="flex gap-2">
+              <input
+                className="flex-1 rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm outline-none focus:border-indigo-400"
+                placeholder={mode === "ask" ? "How would Jay react if…" : "Tell it what it got wrong…"}
+                value={input}
+                onChange={(e) => setInput(e.target.value)}
+                disabled={busy}
+              />
+              <button
+                type="submit"
+                disabled={busy || !input.trim()}
+                className="rounded-lg bg-indigo-600 px-4 text-sm font-medium transition hover:bg-indigo-500 disabled:opacity-40"
+              >
+                {mode === "ask" ? "Ask" : "Send"}
+              </button>
+            </div>
+          </form>
         </div>
-        <div className="flex gap-2">
-          <input
-            className="flex-1 rounded-lg bg-zinc-900 border border-zinc-800 px-3 py-2 outline-none focus:border-indigo-500"
-            placeholder={
-              mode === "ask" ? "How would Jay react if…" : "Tell Jay’s companion what it got wrong…"
-            }
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            disabled={busy}
-          />
-          <button
-            type="submit"
-            disabled={busy || !input.trim()}
-            className="rounded-lg bg-indigo-600 hover:bg-indigo-500 disabled:opacity-40 px-4 font-medium transition"
-          >
-            {mode === "ask" ? "Ask" : "Send"}
-          </button>
-        </div>
-        {mode === "correct" && (
-          <p className="mt-2 text-xs text-zinc-500">
-            Jay reviews every correction before his companion learns from it — nothing changes him automatically.
-          </p>
-        )}
-      </form>
+      </div>
     </main>
   );
 }

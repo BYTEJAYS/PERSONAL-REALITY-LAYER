@@ -79,6 +79,7 @@ from app.companion import (  # noqa: E402
 )
 from app.auth import parse_tokens, classify_token  # noqa: E402
 from app.feedback import classify_submission, assess_submission  # noqa: E402
+from app.intake import PROMPTS, prompt_set  # noqa: E402
 
 
 def test_self_model_extracts_claims_with_polarity():
@@ -1160,6 +1161,20 @@ def test_feedback_facts_quarantine_questions_log():
     assert fact["confidence"] < 0.5
     q = assess_submission("What music does Jay like?")
     assert q["kind"] == "question" and q["status"] == "logged"
+
+
+# --- Guided self-intake ----------------------------------------------------
+def test_intake_prompts_are_high_signal_and_routed():
+    ids = {p["id"] for p in PROMPTS}
+    # The reasoning-heavy categories that personalise the model must be present.
+    for need in ("values", "decisions", "stress", "failure", "voice", "bio"):
+        assert need in ids
+    # Each prompt routes to a source an engine reads; reflections dominate.
+    sources = [p["source"] for p in PROMPTS]
+    assert sources.count("reflection") >= 5
+    assert "voice-sample" in sources and "biography" in sources
+    ps = prompt_set()
+    assert ps["count"] == len(PROMPTS) and ps["guidance"]
 
 
 if __name__ == "__main__":
