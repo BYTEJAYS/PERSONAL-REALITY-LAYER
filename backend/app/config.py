@@ -1,5 +1,6 @@
 from functools import lru_cache
 
+from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -9,6 +10,19 @@ class Settings(BaseSettings):
     # Postgres — canonical memories + pgvector. Default targets the compose
     # service; override with DATABASE_URL for a host-side run against port 5433.
     database_url: str = "postgresql+psycopg://prl:prl@localhost:5433/prl"
+
+    @field_validator("database_url", mode="before")
+    @classmethod
+    def _force_psycopg3(cls, v: str) -> str:
+        # Railway (and most managed Postgres) inject a stock "postgresql://..."
+        # URL, which SQLAlchemy maps to the legacy psycopg2 dialect — but only
+        # psycopg v3 is installed. Pin the driver so we never import psycopg2.
+        if isinstance(v, str):
+            if v.startswith("postgres://"):
+                v = "postgresql://" + v[len("postgres://"):]
+            if v.startswith("postgresql://"):
+                v = "postgresql+psycopg://" + v[len("postgresql://"):]
+        return v
 
     # Neo4j — the Life Graph.
     neo4j_uri: str = "bolt://localhost:7687"
