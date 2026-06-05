@@ -105,6 +105,21 @@ def friend_system_prompt(persona_summary: str = "") -> str:
     return base + "\n\n" + disclosure_policy()
 
 
+# Only volunteer his current mood when the question is actually about how he's
+# doing/feeling — otherwise it reads as a bolted-on, repetitive opener.
+_FEELING_RX = re.compile(
+    r"\b(feel|feeling|feels|doing|mood|happy|sad|ok|okay|alright|stress|stressed|"
+    r"emotion|emotional|lately|mental|depress|anxious|down|how is|how's)\b", re.I)
+
+
+def _clip(text: str, limit: int = 320) -> str:
+    """Up to ~2 sentences; if still too long, cut at a word boundary (never mid-word)."""
+    s = " ".join(re.split(r"(?<=[.!?])\s+", text.strip())[:2]).strip()
+    if len(s) <= limit:
+        return s
+    return s[:limit].rsplit(" ", 1)[0].rstrip(",;:") + "…"
+
+
 def compose_friend_answer(question: str, evidence: list[dict],
                           mood: str | None = None) -> str:
     """Deterministic, warm fallback answer when no model is reachable — grounded in
@@ -116,18 +131,19 @@ def compose_friend_answer(question: str, evidence: list[dict],
     # question (and varies with it), then tie in the next couple of related ones.
     top = evidence[0]
     detail = (top.get("content") or top.get("title") or "").strip()
-    snippet = " ".join(re.split(r"(?<=[.!?])\s+", detail)[:2])[:280].strip()
+    snippet = _clip(detail)
     others = [e["title"] for e in evidence[1:3]
               if e.get("title") and e["title"] != top.get("title")]
     bits = []
-    if mood:
-        bits.append(f"From what I know of {OWNER_NAME}, he's been in a fairly {mood} place lately.")
+    mood_shown = bool(mood and _FEELING_RX.search(question or ""))
+    if mood_shown:
+        bits.append(f"Honestly, {OWNER_NAME}'s been in a fairly {mood} place lately.")
     if snippet:
-        bits.append(f"On that — {snippet}")
+        bits.append(f"On that — {snippet}" if mood_shown else snippet)
     elif top.get("title"):
         bits.append(f"What comes to mind for {OWNER_NAME} is {top['title']}.")
     if others:
-        bits.append("It ties into " + " and ".join(others) + ".")
+        bits.append("It connects to " + " and ".join(others) + ".")
     return " ".join(bits)
 
 

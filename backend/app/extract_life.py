@@ -63,8 +63,10 @@ def _parse_date(text: str, default: date) -> date:
 # Finance
 # ---------------------------------------------------------------------------
 _AMOUNT = re.compile(
-    r"(?:(₹|rs\.?|inr|\$)\s?([\d,]+(?:\.\d+)?))"
-    r"|(?:([\d,]+(?:\.\d+)?)\s?(rupees|rs|dollars|usd))",
+    # Number must start with a digit — `[\d,]+` alone also matched a bare comma
+    # (", Rs" → amount ","), which crashed _to_float on intake of money phrases.
+    r"(?:(₹|rs\.?|inr|\$)\s?(\d[\d,]*(?:\.\d+)?))"
+    r"|(?:(\d[\d,]*(?:\.\d+)?)\s?(rupees|rs|dollars|usd))",
     re.IGNORECASE,
 )
 _INCOME_RX = re.compile(r"\b(received|salary|earned|income|got paid|refund|credited|deposit)\b", re.IGNORECASE)
@@ -88,7 +90,10 @@ _MERCHANTS = ["Netflix", "Spotify", "Amazon", "Flipkart", "Swiggy", "Zomato", "U
 
 
 def _to_float(s: str) -> float:
-    return float(s.replace(",", ""))
+    try:
+        return float((s or "").replace(",", ""))
+    except (ValueError, TypeError):
+        return 0.0  # unparseable → ignored by the amount<=0 guard in callers
 
 
 def extract_finance(text: str, default_date: date) -> list[dict]:
