@@ -170,14 +170,20 @@ def ask(db, question: str, use_llm: bool = True) -> dict:
         qvec = embed(question)
         rows = db.execute(
             base.where(Memory.embedding.isnot(None))
-            .order_by(Memory.embedding.cosine_distance(qvec)).limit(6)
+            .order_by(Memory.embedding.cosine_distance(qvec)).limit(24)
         ).all()
     except Exception:
         rows = []
     if not rows:  # no embeddings / vector search unavailable → recent slice
-        rows = db.execute(base.order_by(Memory.ts.desc()).limit(6)).all()
+        rows = db.execute(base.order_by(Memory.ts.desc()).limit(24)).all()
+
+    # Friend voice: from the relevance-ranked pool, float the curated, person-about
+    # memories to the top so character questions lead with who Jay IS, not raw git
+    # commit messages. Stable sort preserves semantic order within each tier.
+    _PREF = {"about": 0, "biography": 0, "voice-sample": 1, "note": 1}
+    ranked = sorted(rows, key=lambda r: _PREF.get((r[0] or "").lower(), 5))
     evidence = redact_evidence(
-        [{"source": s, "title": t, "content": c, "meta": m} for s, t, c, m in rows]
+        [{"source": s, "title": t, "content": c, "meta": m} for s, t, c, m in ranked[:6]]
     )
 
     # Emotional read (qualitative).
