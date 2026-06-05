@@ -49,17 +49,29 @@ Builder: Nixpacks (`npm ci → build → start`, port honored via `$PORT`). Env 
 
 Then redeploy so the build picks it up. Pages: `/` (Spline brain) and `/dashboard`.
 
-## Seeding the cloud DB (no host Python needed)
-Run the in-container seeder against the cloud Postgres public URL:
-```
-docker compose exec api env \
-  DATABASE_URL="postgresql+psycopg://<user>:<pass>@<railway-public-host>:<port>/<db>" \
-  NEO4J_ENABLED=false \
-  python -m scripts.seed_from_repos /host/transaction-graph-intelligence \
-    /host/synthetic-genesis /host/echo-interrogation /host/party-racer \
-    /host/bling-blue-team /host/github-profile /host/prl
-```
-(Use the Postgres service's **public** TCP proxy host/port from Railway, not the
-private domain, since this runs from your laptop.)
+## Seeding the cloud DB — SYNTHETIC data only
 
-After seeding, every `/cognitive/*` endpoint computes live from the cloud DB.
+> ⚠️ **A public demo must never hold real personal memories.** Do NOT restore
+> `backups/prl_db_*.sql` and do NOT run `seed_from_repos` (your real repos) on a
+> public deployment. Use the fictional demo persona, which lights up every cortex
+> with zero real data.
+
+Validate the dataset offline first (no DB needed):
+```
+cd backend && python scripts/seed_demo.py --check
+```
+Then seed the cloud Postgres (via its **public** TCP proxy host/port from Railway):
+```
+DATABASE_URL="postgresql+psycopg://<user>:<pass>@<railway-public-host>:<port>/<db>" \
+  NEO4J_ENABLED=false python -m scripts.seed_demo
+```
+This ingests ~113 synthetic memories for "Alex Kumar" spanning 2019–2026:
+milestones, recurring finances + an anomaly, health tests/meds, family
+relations/recipe, an emotional arc (recent stress), a night-owl behaviour
+pattern, and goals.
+
+After seeding, every endpoint computes live from the cloud DB:
+`/cognitive/*`, all `/cortex/*` (incl. emotional/social/behaviour), `/memory/*`
+(events, aging, timemachine, compress, reconstruct), and `/reality/*` (world,
+agents, simulate, evolution, …). The LLM steps stay deterministic unless you set
+`LLM_PROVIDER=anthropic` + `ANTHROPIC_API_KEY` (fine here — the data is fake).
