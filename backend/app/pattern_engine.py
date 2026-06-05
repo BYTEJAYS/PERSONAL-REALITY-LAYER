@@ -20,6 +20,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from .models import Entity, Memory, MemoryEntity
+from .rhythm import best_window
 
 # Human labels + which pattern category a feature belongs to.
 FEATURES: dict[str, tuple[str, str]] = {
@@ -195,18 +196,12 @@ def _peak_window(db: Session) -> Pattern | None:
     weight = [0.0] * 24
     for ts, imp in rows:
         weight[ts.hour] += float(imp)
-    total = sum(weight)
-    if total == 0:
+    if sum(weight) == 0:
         return None
-    # Best contiguous 4-hour window (wrapping midnight).
-    best_share, best_start = 0.0, 0
-    for s in range(24):
-        share = sum(weight[(s + k) % 24] for k in range(4)) / total
-        if share > best_share:
-            best_share, best_start = share, s
+    # Same shared best-window logic the Cognitive Twin's rhythm trait uses.
+    h1, h2, best_share = best_window(weight, 4)
     if best_share < 0.30:
         return None
-    h1, h2 = best_start, (best_start + 4) % 24
     return Pattern(
         "peak_window", "productivity",
         f"Your productivity peaks between {h1:02d}:00 and {h2:02d}:00.",

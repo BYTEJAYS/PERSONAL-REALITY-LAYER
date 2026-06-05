@@ -9,7 +9,9 @@ from fastapi.middleware.cors import CORSMiddleware
 from . import graph
 from .config import get_settings
 from .db import init_db
-from .routers import brain, chat, cognitive, ingest, insights, memories, reconstruct
+from .routers import (
+    brain, chat, cognitive, cortex, ingest, insights, memories, memory, reconstruct,
+)
 
 logging.basicConfig(level=logging.INFO)
 log = logging.getLogger("prl")
@@ -41,6 +43,8 @@ app.include_router(ingest.router)
 app.include_router(chat.router)
 app.include_router(insights.router)
 app.include_router(cognitive.router)
+app.include_router(cortex.router)
+app.include_router(memory.router)
 
 
 @app.get("/health", tags=["meta"])
@@ -58,5 +62,9 @@ def root():
                       "/cognitive/simulate", "/cognitive/chapters", "/cognitive/identity",
                       "/cognitive/habits", "/cognitive/decisions", "/cognitive/blind-spots",
                       "/cognitive/os", "/cognitive/knowledge-graph", "/cognitive/learning",
+                      "/cortex/finance", "/cortex/health", "/cortex/family",
+                      "/memory/events", "/memory/aging", "/memory/duplicates",
+                      "/memory/patterns", "/memory/fractal", "/memory/compress",
+                      "/memory/reconstruct",
                       "/brain/state", "/memories", "/reconstruct/{day}", "/ingest/git"],
     }

@@ -16,6 +16,7 @@ from sqlalchemy import distinct, extract, func, select
 from sqlalchemy.orm import Session
 
 from .models import Entity, Memory, MemoryEntity
+from .rhythm import best_window, rhythm_label, window_center
 
 
 @dataclass
@@ -173,20 +174,29 @@ def _focus(db: Session) -> Trait | None:
 
 
 def _attention_rhythm(db: Session) -> Trait | None:
+    # Importance-weighted hour histogram, then the SAME best-window logic the
+    # Pattern Engine uses — so the trait label and the peak_window pattern agree.
     rows = db.execute(
-        select(extract("hour", Memory.ts).label("h"), func.count(Memory.id)).group_by("h")
+        select(extract("hour", Memory.ts).label("h"), func.sum(Memory.importance), func.count(Memory.id))
+        .group_by("h")
     ).all()
-    total = sum(c for _, c in rows)
+    total = sum(int(c) for _, _, c in rows)
     if total < 8:
         return None
-    rows.sort(key=lambda r: r[1], reverse=True)
-    h = int(rows[0][0])
-    label = ("Night owl" if h >= 21 or h < 5 else "Early bird" if h < 11
-             else "Afternoon" if h < 17 else "Evening")
+    weight = [0.0] * 24
+    for h, imp, c in rows:
+        weight[int(h)] = float(imp or 0.0)
+    if sum(weight) == 0:  # fall back to counts if importance is all zero
+        for h, _imp, c in rows:
+            weight[int(h)] = float(c)
+
+    start, end, share = best_window(weight, 4)
+    center = window_center(start, 4)
+    label = rhythm_label(center)
     return Trait(
-        "attention_rhythm", label, round(h / 24, 3), _conf(total, 60),
-        f"Your activity concentrates around {h:02d}:00 (UTC).",
-        {"peak_hour": h},
+        "attention_rhythm", label, round(center / 24, 3), _conf(total, 60),
+        f"Your activity concentrates in the {start:02d}:00–{end:02d}:00 window (UTC).",
+        {"peak_window": [start, end], "center_hour": center, "share": share},
     )
 
 

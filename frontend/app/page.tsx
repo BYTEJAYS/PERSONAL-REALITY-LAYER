@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import Link from "next/link";
 
 import { BrainState, RegionName } from "@/lib/types";
 import { MOCK_BRAIN } from "@/lib/mock";
@@ -37,12 +36,6 @@ export default function Page() {
     <main className="relative h-screen w-screen overflow-hidden bg-ink">
       <BrainCanvas />
       <HUD state={state} live={live} focus={focus} onFocus={setFocus} onAsk={() => {}} onQuery={fetchChat} />
-      <Link
-        href="/dashboard"
-        className="absolute right-5 top-5 z-20 rounded-lg border border-white/15 bg-white/5 px-3 py-1.5 text-xs font-semibold text-white/80 backdrop-blur hover:bg-white/10"
-      >
-        Self-Evolution Dashboard →
-      </Link>
     </main>
   );
 }

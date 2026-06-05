@@ -28,6 +28,30 @@ from app.you_model import (  # noqa: E402
     trait_priors, learn_weights, decide, value_profile, FEATURES,
 )
 from app.self_model import extract_claims, reconcile  # noqa: E402
+from datetime import date  # noqa: E402
+from app.finance_cortex import Transaction, analyze as fin_analyze  # noqa: E402
+from app.health_cortex import HealthEvent, analyze as health_analyze  # noqa: E402
+from app.family_cortex import FamilyFact, analyze as family_analyze  # noqa: E402
+from app.extract_life import extract_finance, extract_health, extract_family  # noqa: E402
+from app.rhythm import best_window, window_center, rhythm_label  # noqa: E402
+from datetime import datetime, timedelta, timezone  # noqa: E402
+from app.events import EventItem, cluster_events  # noqa: E402
+from app.memory_aging import (  # noqa: E402
+    AgingItem, age_tier, target_detail, raw_expired, retention_plan, effective_age,
+)
+from app.dedup import (  # noqa: E402
+    DupItem, cosine, find_duplicate_groups, dedup_savings,
+)
+from app.patterns import (  # noqa: E402
+    DayRecord, learn_pattern, find_exceptions, summarize as pat_summarize,
+)
+from app.fractal import LeafEvent, build_fractal, zoom  # noqa: E402
+from app.compressor import (  # noqa: E402
+    deterministic_summary, summarize_event, memory_dna, plan_compression, plan_stats,
+)
+from app.reconstructor import (  # noqa: E402
+    deterministic_reconstruction, reconstruct_memory, reconstruction_fidelity,
+)
 
 
 def test_self_model_extracts_claims_with_polarity():
@@ -332,6 +356,433 @@ def test_learning_aggregate_sorts_and_buckets():
     assert rets == sorted(rets)
     assert "Rust" in out["forgotten"] and "FastAPI" in out["mastered"]
     print("learning buckets:", out["status_counts"])
+
+
+# --- Life-domain cortexes ---------------------------------------------------
+
+def test_finance_detects_recurring_bill_and_next_due():
+    txns = [
+        Transaction(date(2026, 3, 5), 1200, category="utilities", merchant="electricity"),
+        Transaction(date(2026, 4, 5), 1200, category="utilities", merchant="electricity"),
+        Transaction(date(2026, 5, 5), 1200, category="utilities", merchant="electricity"),
+        Transaction(date(2026, 5, 10), 50000, category="salary", kind="income"),
+    ]
+    out = fin_analyze(txns, today=date(2026, 5, 20))
+    assert out["ready"]
+    rec = out["recurring_payments"]
+    assert any(r["payee"] == "electricity" and r["cadence"] == "monthly" for r in rec)
+    bill = next(r for r in rec if r["payee"] == "electricity")
+    assert bill["next_due"] == "2026-06-04"  # last paid 05-05 + ~30d
+    assert out["savings_rate"] is not None and out["savings_rate"] > 0
+    print("finance recurring:", bill["payee"], bill["cadence"], bill["next_due"])
+
+
+def test_finance_flags_anomaly():
+    txns = [Transaction(date(2026, 5, d), amt, category="food") for d, amt in
+            [(1, 300), (3, 280), (5, 320), (7, 5000)]]
+    out = fin_analyze(txns, today=date(2026, 5, 10))
+    assert out["anomalies"], "should flag the 5000 food spend"
+    assert out["anomalies"][0]["amount"] == 5000
+    print("anomaly:", out["anomalies"][0]["note"])
+
+
+def test_finance_extractor_parses_text():
+    recs = extract_finance("Paid ₹1,200 for the electricity bill. Got my salary of ₹50000.",
+                           date(2026, 5, 5))
+    cats = {r["category"]: r for r in recs}
+    assert "utilities" in cats and cats["utilities"]["amount"] == 1200
+    assert any(r["kind"] == "income" and r["amount"] == 50000 for r in recs)
+    print("finance extract:", [(r["amount"], r["category"], r["kind"]) for r in recs])
+
+
+def test_health_meds_visits_and_checkup_reminder():
+    evs = [
+        HealthEvent(date(2025, 1, 10), "prescription", "metformin", doctor="Sharma"),
+        HealthEvent(date(2025, 1, 10), "visit", "Sharma", doctor="Sharma"),
+        HealthEvent(date(2026, 5, 1), "test", "blood sugar", value=110, unit="mg/dl"),
+        HealthEvent(date(2026, 5, 1), "test", "blood sugar", value=140, unit="mg/dl"),
+    ]
+    out = health_analyze(evs, today=date(2026, 6, 1))
+    assert out["ready"]
+    sugar = next(t for t in out["test_trends"] if t["name"] == "blood sugar")
+    assert sugar["direction"] == "rising"
+    assert any(r["type"] == "checkup_due" for r in out["reminders"])  # last visit > 180d
+    print("health:", sugar["direction"], [r["type"] for r in out["reminders"]])
+
+
+def test_health_extractor_parses_text():
+    recs = extract_health("Dr. Sharma prescribed metformin. My blood sugar was 140 mg/dL.",
+                          date(2026, 5, 1))
+    kinds = {r["kind"] for r in recs}
+    assert "prescription" in kinds and "test" in kinds
+    test = next(r for r in recs if r["kind"] == "test")
+    assert test["value"] == 140 and "metformin" in {r["name"] for r in recs}
+    print("health extract:", [(r["kind"], r["name"], r["value"]) for r in recs])
+
+
+def test_family_important_date_next_occurrence_and_reminder():
+    facts = [
+        FamilyFact(date(2026, 6, 1), "mother", "mother", "date", "birthday", recur_month=6, recur_day=5),
+        FamilyFact(date(2026, 6, 1), "grandmother", "grandmother", "recipe", "her biryani recipe"),
+    ]
+    out = family_analyze(facts, today=date(2026, 6, 1))
+    assert out["ready"]
+    bday = out["important_dates"][0]
+    assert bday["next_occurrence"] == "2026-06-05" and bday["days_until"] == 4
+    assert out["reminders"] and out["reminders"][0]["type"] == "upcoming_date"
+    assert any(s["kind"] == "recipe" for s in out["stories"])
+    print("family date:", bday["occasion"], bday["next_occurrence"], "reminder:", out["reminders"][0]["detail"])
+
+
+def test_family_extractor_parses_relations_and_dates():
+    recs = extract_family("My mother's birthday is on June 5. Grandmother used to tell me stories.",
+                          date(2026, 6, 1))
+    kinds = {r["kind"] for r in recs}
+    assert "date" in kinds and "story" in kinds
+    d = next(r for r in recs if r["kind"] == "date")
+    assert d["recur_month"] == 6 and d["recur_day"] == 5 and d["relation"] == "mother"
+    print("family extract:", [(r["relation"], r["kind"]) for r in recs])
+
+
+# --- Life-domain cortexes: robustness / precision -------------------------
+
+def test_cortexes_empty_inputs_are_graceful():
+    assert fin_analyze([])["ready"] is False
+    assert health_analyze([])["ready"] is False
+    assert family_analyze([])["ready"] is False
+    print("empty cortex inputs handled")
+
+
+def test_finance_extractor_no_false_positives_on_plain_numbers():
+    # No currency symbol/word → must NOT be read as money.
+    recs = extract_finance("I have 3 meetings and finished 2 tasks at 5pm.", date(2026, 5, 1))
+    assert recs == [], recs
+    print("finance false-positive guard ok")
+
+
+def test_health_extractor_ignores_bp_ratio():
+    # Blood pressure is a ratio, not a single trendable value — must be skipped.
+    recs = extract_health("My BP was 120/80 today.", date(2026, 5, 1))
+    assert all(r["name"] != "bp" for r in recs), recs
+    print("bp ratio correctly skipped:", recs)
+
+
+def test_health_canonicalises_sugar_alias():
+    recs = extract_health("glucose 99 mg/dl", date(2026, 5, 1))
+    assert any(r["name"] == "blood sugar" and r["value"] == 99 for r in recs), recs
+    print("sugar alias canonicalised")
+
+
+def test_family_extractor_ignores_unrelated_sentences():
+    recs = extract_family("I deployed the server and fixed a bug.", date(2026, 6, 1))
+    assert recs == [], recs
+    print("family extractor precision ok")
+
+
+# --- Rhythm: the reconciled time-of-day definition ------------------------
+
+def test_rhythm_best_window_finds_night_block_and_wraps():
+    w = [0.0] * 24
+    for h in (22, 23, 0, 1):   # activity clustered around midnight
+        w[h] = 5.0
+    start, end, share = best_window(w, 4)
+    assert start == 22 and end == 2          # wraps midnight
+    assert share > 0.9
+    print("night window:", start, end, share)
+
+
+def test_rhythm_label_thresholds():
+    assert rhythm_label(23) == "Night owl"
+    assert rhythm_label(2) == "Night owl"
+    assert rhythm_label(8) == "Early bird"
+    assert rhythm_label(13) == "Afternoon"
+    assert rhythm_label(19) == "Evening"
+
+
+def test_rhythm_twin_and_pattern_engine_agree():
+    # The whole point of the reconciliation: the trait label (from the window
+    # centre) and the peak window (same function) describe the SAME time of day.
+    w = [0.0] * 24
+    for h in (22, 23, 0, 1):
+        w[h] = 5.0
+    start, end, _ = best_window(w, 4)         # what pattern_engine reports
+    label = rhythm_label(window_center(start, 4))  # what cognitive_model reports
+    assert label == "Night owl"               # consistent story, not contradictory
+    assert 22 <= start or start <= 2
+    print("reconciled:", f"{start:02d}-{end:02d}", "->", label)
+
+
+def test_rhythm_empty_is_safe():
+    assert best_window([0.0] * 24, 4) == (0, 4, 0.0)   # no crash, zero share
+
+
+# --- Memory-Architecture V3: Event-Centric Memory --------------------------
+def _utc(y, m, d, h=12):
+    return datetime(y, m, d, h, tzinfo=timezone.utc)
+
+
+def test_events_collapse_same_day_burst_into_one():
+    # A wedding day: many memories, same people, same day -> ONE event.
+    items = [
+        EventItem(f"w{i}", _utc(2025, 12, 14, 9 + i), f"Wedding moment {i}",
+                  entities=("Sister", "Home"), importance=0.6 + 0.05 * i)
+        for i in range(6)
+    ]
+    events = cluster_events(items)
+    assert len(events) == 1
+    ev = events[0]
+    assert ev.size == 6
+    assert "Sister" in ev.people
+    assert ev.span_days == 0
+    print("event:", ev.title, "size", ev.size, "people", ev.people)
+
+
+def test_events_split_unrelated_distant_memories():
+    items = [
+        EventItem("a", _utc(2025, 1, 1), "Random Tuesday", importance=0.3),
+        EventItem("b", _utc(2025, 6, 1), "Months later", importance=0.3),
+        EventItem("c", _utc(2025, 12, 1), "Even later", importance=0.3),
+    ]
+    events = cluster_events(items)
+    assert len(events) == 3  # no shared entity, big gaps -> separate events
+
+
+def test_events_bridge_shared_entity_across_weeks():
+    # Same project resurfacing over 3 weeks bridges into one event despite gaps.
+    items = [
+        EventItem("p1", _utc(2025, 3, 1), "Start PRL", entities=("prl",), importance=0.5),
+        EventItem("p2", _utc(2025, 3, 12), "PRL again", entities=("prl",), importance=0.5),
+        EventItem("p3", _utc(2025, 3, 25), "PRL more", entities=("prl",), importance=0.5),
+    ]
+    events = cluster_events(items)
+    assert len(events) == 1
+    assert events[0].span_days == 24
+
+
+def test_events_empty_is_safe():
+    assert cluster_events([]) == []
+
+
+# --- Memory-Architecture V3: Memory Aging / Forgetting ---------------------
+def test_aging_tiers_progress_with_age():
+    assert age_tier(5, 0.5) == "full"
+    assert age_tier(200, 0.5) == "summary"
+    assert age_tier(3 * 365, 0.5) == "story"
+    assert age_tier(30 * 365, 0.1) == "faded"
+    # detail strictly decreases as memories get older
+    assert target_detail(5, 0.5) > target_detail(200, 0.5) > target_detail(3 * 365, 0.5)
+
+
+def test_aging_importance_resists_forgetting():
+    # Same age, higher importance -> younger effective age -> richer tier.
+    age = 3 * 365
+    assert effective_age(age, 0.9) < effective_age(age, 0.1)
+    assert target_detail(age, 0.95) >= target_detail(age, 0.05)
+
+
+def test_raw_layer0_expires_by_importance():
+    assert raw_expired(60, 0.1) is True       # trivial raw file past ~1 month
+    assert raw_expired(60, 0.95) is False      # important raw file still inside ~6 months
+    assert raw_expired(400, 0.95) is True      # nothing raw survives past the window
+
+
+def test_retention_plan_reports_compression():
+    items = [AgingItem("recent", 5, 0.5)] + [AgingItem(f"old{i}", 6 * 365, 0.2) for i in range(9)]
+    plan = retention_plan(items)
+    assert plan["count"] == 10
+    assert plan["tiers"]["full"] == 1
+    assert plan["compression_ratio"] < 1.0     # old memories compress the set
+    print("aging plan:", plan["tiers"], "ratio", plan["compression_ratio"])
+
+
+# --- Memory-Architecture V3: Duplicate Elimination -------------------------
+def test_cosine_basic():
+    assert round(cosine([1, 0], [1, 0]), 6) == 1.0
+    assert round(cosine([1, 0], [0, 1]), 6) == 0.0
+
+
+def test_dedup_collapses_near_identical():
+    base = [1.0, 0.0, 0.0, 0.0]
+    items = [
+        DupItem("master", base, importance=0.9, ts=_utc(2025, 1, 1), title="Best shot"),
+        DupItem("d1", [0.99, 0.01, 0.0, 0.0], importance=0.4, ts=_utc(2025, 1, 1, 13)),
+        DupItem("d2", [0.98, 0.0, 0.02, 0.0], importance=0.4, ts=_utc(2025, 1, 1, 14)),
+        DupItem("unique", [0.0, 0.0, 0.0, 1.0], importance=0.5, ts=_utc(2025, 2, 1)),
+    ]
+    groups = find_duplicate_groups(items, threshold=0.9)
+    assert len(groups) == 1
+    g = groups[0]
+    assert g.size == 3
+    assert g.master_id == "master"            # highest importance wins
+    assert "unique" not in g.member_ids
+    savings = dedup_savings(len(items), groups)
+    assert savings["redundant_copies"] == 2
+    print("dedup:", g.as_dict(), savings)
+
+
+def test_dedup_no_false_positive_on_distinct():
+    items = [
+        DupItem("a", [1.0, 0.0, 0.0]),
+        DupItem("b", [0.0, 1.0, 0.0]),
+        DupItem("c", [0.0, 0.0, 1.0]),
+    ]
+    assert find_duplicate_groups(items, threshold=0.9) == []
+
+
+# --- Memory-Architecture V3: Pattern + Exception storage -------------------
+def test_patterns_learns_routine_and_flags_only_exceptions():
+    routine = frozenset({"src:git", "type:knowledge"})
+    days = [DayRecord(f"2026-01-{d:02d}", routine, 4) for d in range(1, 21)]
+    # One trip day (novel tag) and one surge day.
+    days.append(DayRecord("2026-01-21", frozenset({"ent:Goa", "type:episodic"}), 5))
+    days.append(DayRecord("2026-01-22", routine, 40))
+    pattern = learn_pattern(days)
+    assert "src:git" in pattern.core_tags
+    exc = {e.date: e for e in find_exceptions(days, pattern)}
+    assert exc["2026-01-21"].kind == "novel"     # the Goa trip
+    assert exc["2026-01-22"].kind == "surge"      # the unusually busy day
+    assert "2026-01-05" not in exc                # ordinary routine days stored once, not per-day
+    print("exceptions:", {k: v.kind for k, v in exc.items()})
+
+
+def test_patterns_compression_beats_storing_every_day():
+    routine = frozenset({"src:git"})
+    days = [DayRecord(f"2026-02-{d:02d}", routine, 3) for d in range(1, 29)]
+    out = pat_summarize(days)
+    assert out["stored_units"] == 1               # just the pattern, no exceptions
+    assert out["compression_ratio"] < 0.1         # 1 unit vs 28 days
+
+
+def test_patterns_empty_is_safe():
+    out = pat_summarize([])
+    assert out["ready"] is False and out["compression_ratio"] == 0.0
+
+
+# --- Memory-Architecture V3: Fractal Memory --------------------------------
+def test_fractal_rolls_events_into_life_era_year():
+    events = [
+        LeafEvent(_utc(2019, 5, 1), "School play", theme="School", importance=0.5),
+        LeafEvent(_utc(2021, 9, 1), "Start college", theme="College", importance=0.7),
+        LeafEvent(_utc(2022, 3, 1), "Hackathon", theme="College", importance=0.6),
+        LeafEvent(_utc(2025, 12, 14), "Sister's wedding", theme="Family", importance=0.95),
+    ]
+    root = build_fractal(events, era_years=5)
+    assert root is not None and root.level == "life"
+    assert root.size == 4
+    assert root.top_title == "Sister's wedding"   # peak-importance descendant bubbles up
+    eras = zoom(root, "era")
+    assert len(eras) == 3                          # 2015–2019, 2020–2024, 2025–2029 buckets
+    years = zoom(root, "year")
+    assert {y["label"] for y in years} == {"2019", "2021", "2022", "2025"}
+    print("eras:", [e["label"] for e in eras])
+
+
+def test_fractal_empty_is_safe():
+    assert build_fractal([]) is None
+    assert zoom(None, "year") == []
+
+
+# --- Memory-Architecture V3: Semantic Compression Executor -----------------
+def _sample_event():
+    return {
+        "title": "Sister, Home · Dec 2025",
+        "start": "2025-12-14T09:00:00+00:00",
+        "end": "2025-12-15T22:00:00+00:00",
+        "span_days": 1,
+        "size": 6,
+        "importance": 0.95,
+        "people": ["Sister", "Home"],
+        "highlights": ["Ceremony", "Reception", "Dance performance"],
+        "memory_ids": ["m1", "m2", "m3", "m4", "m5", "m6"],
+    }
+
+
+def test_compressor_deterministic_summary_uses_only_given_facts():
+    s = deterministic_summary(_sample_event())
+    assert "6 memories" in s and "Sister" in s and "Ceremony" in s
+    assert s.endswith(".")
+
+
+def test_compressor_prefers_llm_then_falls_back():
+    ev = _sample_event()
+    # A working "model": echoes a vivid line.
+    summary, by = summarize_event(ev, complete_fn=lambda s, u: "A joyful wedding day.")
+    assert by == "llm" and summary == "A joyful wedding day."
+    # Model unreachable (returns None) -> deterministic fallback, never crashes.
+    summary2, by2 = summarize_event(ev, complete_fn=lambda s, u: None)
+    assert by2 == "deterministic" and "memories" in summary2
+    # No model at all -> deterministic.
+    _, by3 = summarize_event(ev, complete_fn=None)
+    assert by3 == "deterministic"
+
+
+def test_compressor_memory_dna_is_compact_and_stable():
+    ev = _sample_event()
+    dna = memory_dna(ev, "A joyful wedding day.")
+    assert dna["people"] == ["Sister", "Home"]
+    assert dna["size"] == 6 and dna["summary"] == "A joyful wedding day."
+    assert len(dna["highlights"]) <= 3
+    # Same event -> same DNA code (deterministic identity).
+    assert dna["code"] == memory_dna(ev, "different summary text")["code"]
+
+
+def test_compressor_plan_collapses_events_and_dups():
+    events = [_sample_event(), {"memory_ids": ["solo"], "size": 1}]  # solo is left alone
+    dups = [{"master_id": "best", "member_ids": ["d1", "d2"], "avg_similarity": 0.99}]
+    actions = plan_compression(events, dups, complete_fn=None)
+    kinds = sorted(a.kind for a in actions)
+    assert kinds == ["dedup_merge", "event_summary"]
+    ev_action = next(a for a in actions if a.kind == "event_summary")
+    assert ev_action.anchor == "m1" and ev_action.absorbs == ["m2", "m3", "m4", "m5", "m6"]
+    stats = plan_stats(actions, total_memories=10)
+    assert stats["memories_absorbed"] == 7      # 5 event members + 2 dup copies
+    assert 0 < stats["compaction_ratio"] <= 1
+    print("compaction plan:", stats)
+
+
+def test_compressor_plan_empty_is_safe():
+    assert plan_compression([], [], None) == []
+    assert plan_stats([], 0)["compaction_ratio"] == 0.0
+
+
+# --- Memory-Architecture V3: Generative Reconstruction ---------------------
+def _sample_dna():
+    return memory_dna(_sample_event(), "A joyful winter wedding at home.")
+
+
+def test_reconstruction_roundtrips_from_dna():
+    # Compress an event to DNA, then reconstruct from ONLY that DNA.
+    dna = _sample_dna()
+    out = reconstruct_memory(dna, complete_fn=None)
+    assert out["is_reconstruction"] is True
+    assert out["generated_by"] == "deterministic"
+    assert "Sister" in out["narrative"]            # preserved people survive the round-trip
+    assert "wedding" in out["narrative"].lower()   # preserved summary survives
+    assert "Dec 2025" in out["title"]
+    print("reconstruction:", out["narrative"])
+
+
+def test_reconstruction_prefers_llm_then_falls_back():
+    dna = _sample_dna()
+    out = reconstruct_memory(dna, complete_fn=lambda s, u: "I remember the warmth of that day.")
+    assert out["generated_by"] == "llm" and "warmth" in out["narrative"]
+    # Model returns nothing -> deterministic, still labelled a reconstruction.
+    out2 = reconstruct_memory(dna, complete_fn=lambda s, u: None)
+    assert out2["generated_by"] == "deterministic" and out2["is_reconstruction"]
+
+
+def test_reconstruction_fidelity_tracks_preserved_signal():
+    rich = _sample_dna()
+    sparse = memory_dna({"size": 1, "people": [], "highlights": [], "importance": 0.1}, "")
+    assert reconstruction_fidelity(rich) > reconstruction_fidelity(sparse)
+    assert 0.0 <= reconstruction_fidelity(sparse) <= 1.0
+
+
+def test_reconstruction_empty_dna_is_safe():
+    out = reconstruct_memory({}, complete_fn=None)
+    assert out["fidelity"] == 0.0
+    assert "No preserved essence" in out["narrative"]
+    assert deterministic_reconstruction({})  # does not crash
 
 
 if __name__ == "__main__":

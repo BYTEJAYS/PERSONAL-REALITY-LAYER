@@ -21,6 +21,7 @@ from datetime import datetime, timezone
 
 from sqlalchemy import select
 
+from ..extract_life import extract_all
 from ..memory_engine import EntityRef, MemoryInput, ingest
 from ..models import Entity
 from .extract import extract_skills
@@ -118,12 +119,21 @@ def ingest_text(
     goals = detect_goals(text)
     entities += [EntityRef("goal", g, role="stated") for g in goals]
 
+    # Life-domain mining → Finance / Health / Family cortex records, stored on
+    # meta so the cortex adapters can read them back. Named family members also
+    # become person entities in the Life Graph.
+    life = extract_all(text, ts.date())
+    family_people = {f["person"] for f in life.get("family", []) if f.get("person")}
+    entities += [EntityRef("person", p, role="family") for p in sorted(family_people)]
+
+    meta = {"ingest": "text", "goal_count": len(goals)}
+    meta.update(life)  # finance / health / family lists (only present domains)
+
     memory = ingest(
         db,
         MemoryInput(
             ts=ts, source=source, title=title or _title_from(text), content=text,
-            importance=importance, emotion=emotion, entities=entities,
-            meta={"ingest": "text", "goal_count": len(goals)},
+            importance=importance, emotion=emotion, entities=entities, meta=meta,
         ),
     )
     return {
@@ -132,5 +142,8 @@ def ingest_text(
         "skills_linked": skills,
         "projects_linked": linked_projects,
         "goals_detected": goals,
+        "finance_records": len(life.get("finance", [])),
+        "health_records": len(life.get("health", [])),
+        "family_records": len(life.get("family", [])),
         "memory_type": memory.memory_type if memory else None,
     }

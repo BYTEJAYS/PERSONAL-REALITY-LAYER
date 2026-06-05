@@ -1,0 +1,392 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>PRL — Personal Reality Layer</title>
+<style>
+  :root{
+    --ink:#16181d; --muted:#5b6270; --line:#e3e7ef; --soft:#f5f7fb;
+    --blue:#3a73ff; --purple:#a855f7; --gold:#f5b301; --green:#22c55e; --red:#ef4444; --cyan:#27c8ff;
+    --bg0:#0b1020; --bg1:#141a30;
+  }
+  *{ box-sizing:border-box; -webkit-print-color-adjust:exact; print-color-adjust:exact; }
+  @page{ size:A4; margin:18mm 16mm; }
+  html,body{ margin:0; padding:0; color:var(--ink);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Inter,Helvetica,Arial,sans-serif;
+    font-size:10.6pt; line-height:1.5; }
+  h1,h2,h3{ line-height:1.18; color:var(--ink); }
+  h2{ font-size:19pt; margin:0 0 4px; letter-spacing:-.2px; }
+  h3{ font-size:12.5pt; margin:18px 0 6px; }
+  p{ margin:7px 0; }
+  .muted{ color:var(--muted); }
+  .small{ font-size:9pt; }
+  .accent{ color:var(--blue); }
+  section{ page-break-before:always; padding-top:2px; }
+  .kicker{ font-size:8.5pt; letter-spacing:2.4px; text-transform:uppercase; color:var(--blue); font-weight:700; margin-bottom:6px;}
+  .rule{ height:3px;width:54px;background:linear-gradient(90deg,var(--blue),var(--purple));border-radius:3px;margin:8px 0 16px;}
+  ul{ margin:6px 0; padding-left:18px; } li{ margin:3px 0; }
+
+  /* ---------- Cover ---------- */
+  .cover{ page-break-after:always; height:100%; min-height:247mm; color:#eaf0ff;
+    background:radial-gradient(1200px 600px at 70% -10%, #24306a 0%, transparent 60%),
+               linear-gradient(160deg,var(--bg0),var(--bg1));
+    margin:-18mm -16mm; padding:34mm 22mm; position:relative; }
+  .cover .badge{ font-size:9pt; letter-spacing:3px; text-transform:uppercase; color:#9fb3ff; font-weight:700;}
+  .cover h1{ font-size:46pt; margin:14px 0 4px; color:#fff; letter-spacing:-1px; }
+  .cover .sub{ font-size:14pt; color:#aebbe6; max-width:150mm; }
+  .cover .tag{ margin-top:26px; font-size:12pt; color:#cdd8ff; border-left:3px solid var(--blue); padding-left:14px; max-width:150mm;}
+  .cover .meta{ position:absolute; bottom:30mm; left:22mm; right:22mm; display:flex; justify-content:space-between;
+    border-top:1px solid rgba(255,255,255,.16); padding-top:14px; font-size:9.5pt; color:#9fb3ff;}
+  .dots{ position:absolute; top:30mm; right:22mm; display:flex; gap:8px;}
+  .dot{ width:12px;height:12px;border-radius:50%; opacity:.9;}
+
+  /* ---------- Components ---------- */
+  .lead{ font-size:11.6pt; color:#2b3340; }
+  .grid2{ display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+  .grid3{ display:grid; grid-template-columns:1fr 1fr 1fr; gap:10px; }
+  .card{ border:1px solid var(--line); border-radius:10px; padding:11px 13px; background:#fff; break-inside:avoid; }
+  .card.soft{ background:var(--soft); }
+  .card h4{ margin:0 0 4px; font-size:10.5pt; }
+  .pill{ display:inline-block; font-size:8pt; font-weight:700; padding:2px 8px; border-radius:20px; }
+  .pill.live{ background:#e7f9ee; color:#138a45; } .pill.partial{ background:#fff4e0; color:#9a6a00; }
+  .pill.plan{ background:#eef1fb; color:#42509a; }
+
+  table{ width:100%; border-collapse:collapse; margin:8px 0; font-size:9.3pt; }
+  th,td{ text-align:left; padding:6px 8px; border-bottom:1px solid var(--line); vertical-align:top; }
+  th{ background:var(--soft); font-size:8.4pt; text-transform:uppercase; letter-spacing:.6px; color:var(--muted); }
+  code{ font-family:"SF Mono",Menlo,Consolas,monospace; font-size:8.8pt; background:var(--soft); padding:1px 5px; border-radius:4px; color:#33405e;}
+
+  /* ---------- Architecture stack ---------- */
+  .stack{ display:flex; flex-direction:column; gap:8px; margin:14px 0; }
+  .layer{ border:1px solid var(--line); border-left:5px solid var(--blue); border-radius:9px; padding:10px 13px; background:#fff; break-inside:avoid;}
+  .layer .lbl{ font-size:8pt; letter-spacing:1.5px; text-transform:uppercase; color:var(--muted); font-weight:700;}
+  .layer .name{ font-size:11.5pt; font-weight:700; }
+  .layer.l-ingest{border-left-color:var(--green);} .layer.l-mem{border-left-color:var(--blue);}
+  .layer.l-graph{border-left-color:var(--purple);} .layer.l-cog{border-left-color:var(--gold);}
+  .layer.l-cortex{border-left-color:var(--cyan);} .layer.l-face{border-left-color:var(--red);}
+  .arrow{ text-align:center; color:#b9c2d6; font-size:13pt; line-height:.5; margin:-2px 0;}
+  .tags{ margin-top:4px; } .tag-sm{ display:inline-block; font-size:8pt; color:#3a4566; background:var(--soft); border:1px solid var(--line); border-radius:20px; padding:1px 8px; margin:2px 3px 0 0;}
+
+  .region{ display:inline-block; width:10px;height:10px;border-radius:50%; margin-right:5px; vertical-align:middle;}
+  .quote{ font-size:13pt; font-style:italic; color:#2b3340; border-left:3px solid var(--purple); padding:4px 0 4px 16px; margin:14px 0;}
+  .foot{ margin-top:22px; padding-top:10px; border-top:1px solid var(--line); color:var(--muted); font-size:8.6pt; display:flex; justify-content:space-between;}
+</style>
+</head>
+<body>
+
+<!-- ============ COVER ============ -->
+<div class="cover">
+  <div class="dots">
+    <span class="dot" style="background:#3a73ff"></span>
+    <span class="dot" style="background:#a855f7"></span>
+    <span class="dot" style="background:#f5b301"></span>
+    <span class="dot" style="background:#22c55e"></span>
+    <span class="dot" style="background:#ef4444"></span>
+  </div>
+  <div class="badge">Personal Reality Layer · Whitepaper</div>
+  <h1>PRL</h1>
+  <div class="sub">A lifelong cognitive operating system — the second memory of a human being.</div>
+  <div class="tag">
+    Human memory is limited, fragmented, and temporary.<br/>
+    PRL is a persistent, evolving memory system that grows alongside its owner — turning
+    scattered life data into structured knowledge, and knowledge into wisdom.
+  </div>
+  <div class="meta">
+    <div><b style="color:#fff">Author</b> · Jay (BYTEJAYS)</div>
+    <div><b style="color:#fff">Status</b> · Working backend core + cognitive engine suite</div>
+    <div><b style="color:#fff">Version</b> · 0.1 · 2026</div>
+  </div>
+</div>
+
+<!-- ============ 1. CORE IDEA ============ -->
+<section>
+  <div class="kicker">01 · The Core Idea</div>
+  <h2>Not a chatbot. Not a notes app. A second memory.</h2>
+  <div class="rule"></div>
+  <p class="lead">PRL continuously learns from a person's experiences, documents, habits, conversations,
+  media, and actions — transforming scattered information into structured knowledge and long-term
+  intelligence. Instead of merely <i>storing</i> information, it understands the relationships
+  between memories, anticipates future needs, and preserves a person's knowledge for decades.</p>
+
+  <p>It exists to answer one fundamental problem:</p>
+  <div class="quote">"Human memory is limited, fragmented, and temporary. PRL creates a persistent and
+  evolving memory system that grows alongside its owner throughout life."</div>
+
+  <h3>What people lose every day</h3>
+  <div class="grid3">
+    <div class="card soft"><b>Documents</b><br/><span class="small muted">IDs, property papers, policies, certificates — misplaced.</span></div>
+    <div class="card soft"><b>Stories</b><br/><span class="small muted">Family history and wisdom, forgotten with a generation.</span></div>
+    <div class="card soft"><b>Records</b><br/><span class="small muted">Medical history and finances, scattered and fragmented.</span></div>
+  </div>
+  <p>PRL is a digital extension of human memory that never forgets and continuously organises
+  life into meaning. The system transforms <b>data → understanding → wisdom</b>.</p>
+
+  <div class="foot"><span>PRL — Personal Reality Layer</span><span>01 · Core Idea</span></div>
+</section>
+
+<!-- ============ 2. PHILOSOPHY ============ -->
+<section>
+  <div class="kicker">02 · Concept &amp; Philosophy</div>
+  <h2>From data, to understanding, to wisdom.</h2>
+  <div class="rule"></div>
+  <p>Most tools stop at storage. PRL is built as a pipeline that keeps climbing the ladder of
+  abstraction — each layer adds meaning the layer below could not see.</p>
+
+  <div class="grid2">
+    <div class="card"><h4><span class="region" style="background:var(--blue)"></span>Data</h4>
+      <span class="small muted">Raw signals: a commit, a bill, a prescription, a voice note, a photo, a chat.</span></div>
+    <div class="card"><h4><span class="region" style="background:var(--green)"></span>Information</h4>
+      <span class="small muted">Signals normalised into typed, time-stamped, embedded <i>memories</i>.</span></div>
+    <div class="card"><h4><span class="region" style="background:var(--purple)"></span>Knowledge</h4>
+      <span class="small muted">Memories connected into a graph of people, projects, places &amp; concepts.</span></div>
+    <div class="card"><h4><span class="region" style="background:var(--gold)"></span>Wisdom</h4>
+      <span class="small muted">Patterns, predictions, blind-spots &amp; a model that reasons the way you do.</span></div>
+  </div>
+
+  <h3>A first principle: never fabricate</h3>
+  <p>Every PRL insight is <b>evidence-grounded</b> — each one carries a score, a confidence, the
+  evidence behind it, and a plain-language reason. When the data is too thin to support a claim,
+  the system <b>says nothing</b> rather than inventing one. PRL measures; it never moralises.</p>
+
+  <div class="foot"><span>PRL — Personal Reality Layer</span><span>02 · Concept</span></div>
+</section>
+
+<!-- ============ 3. ARCHITECTURE ============ -->
+<section>
+  <div class="kicker">03 · System Architecture</div>
+  <h2>One write path. One graph. Many minds.</h2>
+  <div class="rule"></div>
+  <p>Every signal — regardless of source — funnels through a single <b>Memory Engine</b>, gets
+  embedded and entity-resolved, and is written once to a vector store and projected into a graph.
+  Everything above reads from that shared substrate.</p>
+
+  <div class="stack">
+    <div class="layer l-ingest"><div class="lbl">Ingestion · Connectors</div>
+      <div class="name">Capture reality from many sources</div>
+      <div class="tags">
+        <span class="tag-sm">git</span><span class="tag-sm">free-text / journal</span>
+        <span class="tag-sm">filesystem</span><span class="tag-sm">browser</span><span class="tag-sm">shell</span>
+        <span class="tag-sm">documents*</span><span class="tag-sm">photos / audio*</span><span class="tag-sm">calendar*</span>
+      </div></div>
+    <div class="arrow">▼</div>
+
+    <div class="layer l-mem"><div class="lbl">Memory Engine · single write path</div>
+      <div class="name">Normalise → embed → resolve entities → persist</div>
+      <div class="small muted">Pluggable embeddings (local sentence-transformers, 384-dim; offline hashing fallback).
+      Every connector calls <code>ingest()</code>. Idempotent via dedupe keys.</div></div>
+    <div class="arrow">▼</div>
+
+    <div class="layer l-graph"><div class="lbl">Storage · Memory + Knowledge cortex</div>
+      <div class="name">Vector memory (Postgres + pgvector) &middot; Life Graph (Neo4j)</div>
+      <div class="small muted">Semantic recall by meaning, and a relationship graph connecting
+      people, projects, goals, skills &amp; places — the brain's five regions.</div></div>
+    <div class="arrow">▼</div>
+
+    <div class="layer l-cog"><div class="lbl">Cognition · the reasoning suite</div>
+      <div class="name">16+ evidence-grounded cognitive engines</div>
+      <div class="small muted">Twin, prediction, trends, patterns, life-sim, identity, blind-spots,
+      personal OS, knowledge-evolution, learning/decay, self-model, you-model.</div></div>
+    <div class="arrow">▼</div>
+
+    <div class="layer l-cortex"><div class="lbl">Ledger · life-domain cortexes</div>
+      <div class="name">Finance &middot; Health &middot; Family</div>
+      <div class="small muted">Domain understanding mined from everyday text: bills &amp; due-dates,
+      medications &amp; reminders, relationships &amp; preserved stories.</div></div>
+    <div class="arrow">▼</div>
+
+    <div class="layer l-face"><div class="lbl">Interface</div>
+      <div class="name">Cognitive Core (3D particle brain) &middot; Self-Evolution Dashboard &middot; Chat</div>
+      <div class="small muted">Ask years of memory in natural language; watch the AI's internal state.</div></div>
+  </div>
+  <p class="small muted">* Connectors marked with an asterisk are designed-for and on the roadmap; git, free-text,
+  filesystem, browser and shell are implemented today.</p>
+
+  <div class="foot"><span>PRL — Personal Reality Layer</span><span>03 · Architecture</span></div>
+</section>
+
+<!-- ============ 4. MEMORY MODEL ============ -->
+<section>
+  <div class="kicker">04 · The Memory Model</div>
+  <h2>Human-like memory, in layers.</h2>
+  <div class="rule"></div>
+  <p>Each memory is the atomic unit of reality: a time-stamped, embedded record with its source,
+  importance, emotion, location and the entities it involves. Memories are typed into human-like
+  layers so retrieval can reason about <i>what kind</i> of memory it is.</p>
+
+  <div class="grid3">
+    <div class="card"><h4>Episodic</h4><span class="small muted">Personal experiences &amp; events.</span></div>
+    <div class="card"><h4>Semantic</h4><span class="small muted">Facts, knowledge &amp; skills.</span></div>
+    <div class="card"><h4>Social</h4><span class="small muted">People &amp; interactions.</span></div>
+    <div class="card"><h4>Goal</h4><span class="small muted">Stated intentions &amp; aspirations.</span></div>
+    <div class="card"><h4>Procedural*</h4><span class="small muted">Routines &amp; how-to skill.</span></div>
+    <div class="card"><h4>Emotional*</h4><span class="small muted">Moments that carried weight.</span></div>
+  </div>
+
+  <h3>The Life Graph — five cognitive regions</h3>
+  <p>Entities map onto the brain regions visualised in the Cognitive Core. Region intensity is
+  data-driven — the more a region is fed, the brighter it burns.</p>
+  <p>
+    <span class="region" style="background:#3a73ff"></span><b>Memory</b> (places) &nbsp;
+    <span class="region" style="background:#a855f7"></span><b>Knowledge</b> (skills) &nbsp;
+    <span class="region" style="background:#f5b301"></span><b>Goal</b> (goals) &nbsp;
+    <span class="region" style="background:#22c55e"></span><b>Social</b> (people) &nbsp;
+    <span class="region" style="background:#ef4444"></span><b>Project</b> (projects)
+  </p>
+  <p class="small muted">* Procedural and emotional layers are on the near-term roadmap; episodic, semantic,
+  social and goal typing are implemented.</p>
+
+  <div class="foot"><span>PRL — Personal Reality Layer</span><span>04 · Memory Model</span></div>
+</section>
+
+<!-- ============ 5. COGNITIVE SUITE ============ -->
+<section>
+  <div class="kicker">05 · The Cognitive Engine Suite</div>
+  <h2>Sixteen ways of understanding a person.</h2>
+  <div class="rule"></div>
+  <p>Each engine is a pure, testable core plus a thin database adapter. All are explainable —
+  score, confidence, evidence, reason — and all refuse to speak below their data threshold.</p>
+
+  <table>
+    <tr><th>Engine</th><th>What it reveals</th></tr>
+    <tr><td><b>Cognitive Twin</b></td><td>Evidence-backed traits: learning style, persistence, curiosity, focus, attention rhythm.</td></tr>
+    <tr><td><b>Prediction</b></td><td>Probabilistic burnout, project completion, habit stability, knowledge decay.</td></tr>
+    <tr><td><b>Trends</b></td><td>Rising / fading / emerging / dormant interests over time.</td></tr>
+    <tr><td><b>Patterns</b></td><td>Cross-signal correlations (contemporaneous &amp; time-lagged).</td></tr>
+    <tr><td><b>Life Simulation</b></td><td>30-day / 90-day / 1-year / 5-year trajectories + counterfactuals.</td></tr>
+    <tr><td><b>Life Chapters</b></td><td>Auto-detected phases from sustained shifts in dominant focus.</td></tr>
+    <tr><td><b>Identity</b></td><td>Claim vs. pursuit — stated priorities against observed behaviour.</td></tr>
+    <tr><td><b>Habit Genome</b></td><td>Each habit as a living entity: forming → growing → stable → declining → dormant → dead.</td></tr>
+    <tr><td><b>Decision Genome</b></td><td>Inferred decisions, their outcomes, and follow-through patterns.</td></tr>
+    <tr><td><b>Blind Spots</b></td><td>Hidden risks, patterns &amp; opportunities synthesised across engines.</td></tr>
+    <tr><td><b>Personal OS</b></td><td>Current → desired → distance → obstacles → leverage points.</td></tr>
+    <tr><td><b>Knowledge Evolution</b></td><td>The temporal DAG of how concepts emerged and fed one another.</td></tr>
+    <tr><td><b>Learning / Decay</b></td><td>Per-concept retention curves, half-life, and at-risk knowledge.</td></tr>
+    <tr><td><b>Self-Model</b></td><td>What you say about yourself, reconciled against what behaviour shows.</td></tr>
+    <tr><td><b>You-Model</b></td><td>A from-scratch value model that weighs options the way <i>you</i> would.</td></tr>
+    <tr><td><b>Reflection / Insights</b></td><td>Plain-language life insights drawn from all of the above.</td></tr>
+  </table>
+
+  <div class="foot"><span>PRL — Personal Reality Layer</span><span>05 · Cognition</span></div>
+</section>
+
+<!-- ============ 6. LIFE-DOMAIN CORTEXES ============ -->
+<section>
+  <div class="kicker">06 · The Ledger · Life-Domain Cortexes</div>
+  <h2>Finance. Health. Family.</h2>
+  <div class="rule"></div>
+  <p>Where the cognitive suite models <i>who you are</i>, the Ledger cortexes organise <i>what your
+  life contains</i>. Each reads structured records mined from everyday text and returns an organised,
+  evidence-backed view — and, like every PRL engine, stays silent when there is nothing to say.</p>
+
+  <div class="grid3">
+    <div class="card"><h4><span class="region" style="background:var(--green)"></span>Finance Cortex</h4>
+      <ul class="small">
+        <li>Spend trend &amp; top categories</li>
+        <li>Recurring-bill detection</li>
+        <li><b>Next-due prediction</b></li>
+        <li>Savings rate</li>
+        <li>Anomaly detection (robust median)</li>
+      </ul></div>
+    <div class="card"><h4><span class="region" style="background:var(--red)"></span>Health Cortex</h4>
+      <ul class="small">
+        <li>Active medications</li>
+        <li>Doctor visits</li>
+        <li>Test-result trends</li>
+        <li>Refill &amp; check-up reminders</li>
+        <li><span class="small muted">record-keeping, not advice</span></li>
+      </ul></div>
+    <div class="card"><h4><span class="region" style="background:var(--purple)"></span>Family Cortex</h4>
+      <ul class="small">
+        <li>Relationship map</li>
+        <li>Preserved stories &amp; recipes</li>
+        <li>Birthdays &amp; anniversaries</li>
+        <li><b>Next-occurrence + reminders</b></li>
+        <li>Generational continuity</li>
+      </ul></div>
+  </div>
+
+  <h3>How a single sentence becomes structured memory</h3>
+  <table>
+    <tr><th>You write</th><th>PRL extracts</th></tr>
+    <tr><td><code>"Paid ₹1,200 electricity bill"</code></td><td>expense · utilities · recurring → predicts next month's due date</td></tr>
+    <tr><td><code>"Dr. Sharma prescribed metformin; sugar 140"</code></td><td>prescription + test reading → med list, trend, check-up reminder</td></tr>
+    <tr><td><code>"Mom's birthday is on June 5"</code></td><td>family date → next occurrence + reminder; "Mom" → person in the graph</td></tr>
+  </table>
+  <p class="small"><span class="pill live">implemented</span>&nbsp; All three cortexes, the text miners,
+  the API endpoints (<code>/cortex/finance · /health · /family</code>), and 7 dedicated tests
+  (suite: 29/29 passing) — verifiable offline.</p>
+
+  <div class="foot"><span>PRL — Personal Reality Layer</span><span>06 · The Ledger</span></div>
+</section>
+
+<!-- ============ 7. EVOLUTION STAGES ============ -->
+<section>
+  <div class="kicker">07 · Evolution Stages</div>
+  <h2>From vault, to companion, to inheritance.</h2>
+  <div class="rule"></div>
+
+  <div class="stack">
+    <div class="layer l-mem"><div class="lbl">Stage 1 · Digital Memory &nbsp; <span class="pill live">foundation built</span></div>
+      <div class="name">An intelligent vault</div>
+      <div class="small muted">Store, search instantly, retrieve forgotten details, organise life automatically.</div></div>
+    <div class="layer l-graph"><div class="lbl">Stage 2 · Understanding &nbsp; <span class="pill live">engines live</span></div>
+      <div class="name">From remembering to recognising patterns</div>
+      <div class="small muted">Spend trends, frequent contacts, health changes, work routines, productivity cycles.</div></div>
+    <div class="layer l-cog"><div class="lbl">Stage 3 · Prediction &nbsp; <span class="pill partial">in progress</span></div>
+      <div class="name">From understanding to anticipation</div>
+      <div class="small muted">Renewal reminders, bill due-dates, health-risk patterns, upcoming expenses, anniversaries.</div></div>
+    <div class="layer l-cortex"><div class="lbl">Stage 4 · Cognitive Partner &nbsp; <span class="pill partial">chat + you-model</span></div>
+      <div class="name">An intelligent companion that reasons over years</div>
+      <div class="small muted">"Where's the 2017 property agreement?" · "When did I last see Dr. Sharma?" · "Which supplier is cheapest?"</div></div>
+    <div class="layer l-face"><div class="lbl">Stage 5 · Legacy Intelligence &nbsp; <span class="pill plan">vision</span></div>
+      <div class="name">Memory becomes inheritance</div>
+      <div class="small muted">Future generations interact with preserved stories, experiences and wisdom.</div></div>
+  </div>
+
+  <div class="foot"><span>PRL — Personal Reality Layer</span><span>07 · Evolution</span></div>
+</section>
+
+<!-- ============ 8. PRIVACY + STACK + ROADMAP ============ -->
+<section>
+  <div class="kicker">08 · Privacy, Stack &amp; Roadmap</div>
+  <h2>Your memory belongs to you.</h2>
+  <div class="rule"></div>
+
+  <div class="grid2">
+    <div class="card soft"><h4>Privacy-first architecture</h4>
+      <ul class="small">
+        <li>Local-first processing</li>
+        <li>Encryption by default</li>
+        <li>User-controlled permissions &amp; selective sharing</li>
+        <li>Transparent memory deletion</li>
+        <li>No selling of personal data</li>
+      </ul>
+      <p class="small muted">PRL is not surveillance. It is ownership of personal intelligence.</p></div>
+    <div class="card soft"><h4>Technology stack</h4>
+      <table style="margin:0">
+        <tr><td>Memory store</td><td>Postgres + pgvector</td></tr>
+        <tr><td>Life Graph</td><td>Neo4j</td></tr>
+        <tr><td>Embeddings</td><td>sentence-transformers (local)</td></tr>
+        <tr><td>Reasoning</td><td>from-scratch models + local LLM voice</td></tr>
+        <tr><td>API</td><td>FastAPI · Python</td></tr>
+        <tr><td>Interface</td><td>Next.js · React Three Fiber</td></tr>
+        <tr><td>Infra</td><td>Docker Compose · Redis</td></tr>
+      </table></div>
+  </div>
+
+  <h3>Roadmap</h3>
+  <div class="grid3">
+    <div class="card"><b>Multimodal intake</b><br/><span class="small muted">Documents (ID/property/policies), photos, audio, calendar.</span></div>
+    <div class="card"><b>Deeper memory</b><br/><span class="small muted">Procedural &amp; emotional layers; richer retrieval.</span></div>
+    <div class="card"><b>Reality Interface</b><br/><span class="small muted">Timeline, life-graph &amp; knowledge-galaxy front-end.</span></div>
+  </div>
+
+  <div class="quote" style="margin-top:24px">"To ensure that human experiences, knowledge, memories, and wisdom are never lost — but
+  continuously evolve into intelligence that benefits both present and future generations."</div>
+  <p class="lead" style="text-align:center">PRL is not software. PRL is the digital continuity of human life.</p>
+
+  <div class="foot"><span>PRL — Personal Reality Layer · Whitepaper v0.1 · 2026</span><span>08 · Closing</span></div>
+</section>
+
+</body>
+</html>
