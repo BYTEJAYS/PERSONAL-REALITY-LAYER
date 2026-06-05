@@ -150,10 +150,11 @@ function delay<T>(v: T, ms: number): Promise<T> {
   return new Promise((r) => setTimeout(() => r(v), ms));
 }
 
-// Cloud Ollama can be slow on CPU — allow a generous timeout.
+// Cloud Ollama on CPU can take 10-30s+ per reply; the API itself falls back to a
+// deterministic answer at 60s, so give the request 90s before the browser bails.
 export async function askCompanion(token: string, question: string): Promise<CompanionReply> {
   if (DEMO) return delay(demoAnswer(question), 900); // simulate "thinking"
-  return companionPost<CompanionReply>("/companion/ask", token, { question });
+  return companionPost<CompanionReply>("/companion/ask", token, { question }, 90000);
 }
 
 export async function correctCompanion(
