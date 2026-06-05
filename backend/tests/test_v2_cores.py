@@ -56,6 +56,17 @@ from app.emotional_cortex import EmotionEvent, analyze as emo_analyze, valence  
 from app.social_cortex import Interaction, analyze as social_analyze  # noqa: E402
 from app.behaviour_cortex import Activity, analyze as beh_analyze  # noqa: E402
 from app.time_machine import TimePoint, bucket, in_period  # noqa: E402
+from app.importance_engine import (  # noqa: E402
+    ImportanceFactors, score_importance, label_for,
+)
+from app.confidence_engine import Evidence, score_confidence, source_quality  # noqa: E402
+from app.memory_economy import memory_value, compression_policy, MemoryEcon  # noqa: E402
+from app.versioning import VersionedFact, build_fact  # noqa: E402
+from app.curiosity_engine import (  # noqa: E402
+    detect_gaps, from_unidentified_people, from_repeated_topics,
+    synthesize as curiosity_synthesize,
+)
+from app.reality_compiler import pipeline_report, STAGES  # noqa: E402
 
 
 def test_self_model_extracts_claims_with_polarity():
@@ -859,6 +870,118 @@ def test_time_machine_empty_and_bad_scale():
         assert False, "expected ValueError"
     except ValueError:
         pass
+
+
+# --- Reality OS: Importance Engine -----------------------------------------
+def test_importance_marriage_beats_meme():
+    marriage = score_importance(ImportanceFactors(
+        emotional=1.0, relationship=1.0, financial=0.8, historical=1.0,
+        frequency=1.0, rarity=1.0))
+    meme = score_importance(ImportanceFactors(
+        emotional=0.1, relationship=0.0, financial=0.0, historical=0.1,
+        frequency=0.0, rarity=0.0))
+    assert marriage["score"] > meme["score"]
+    assert marriage["label"] == "Very High" and meme["label"] == "Low"
+    assert marriage["drivers"]            # names what mattered
+    print("importance:", marriage["label"], "vs", meme["label"])
+
+
+def test_importance_labels_and_clamping():
+    assert label_for(0.9) == "Very High" and label_for(0.0) == "Low"
+    # Out-of-range factors are clamped, score stays in [0,1].
+    s = score_importance(ImportanceFactors(emotional=5.0, rarity=-2.0))
+    assert 0.0 <= s["score"] <= 1.0
+
+
+# --- Reality OS: Confidence Engine -----------------------------------------
+def test_confidence_more_distinct_sources_raise_trust():
+    one = score_confidence(Evidence(sources=["note"]))
+    many = score_confidence(Evidence(sources=["invoice", "bank", "photo"], verified=True))
+    assert many["confidence"] > one["confidence"]
+    assert many["label"] == "high"
+    assert source_quality("invoice") > source_quality("chat")
+    print("confidence:", one["confidence"], "->", many["confidence"])
+
+
+def test_confidence_quarantines_unverified():
+    none = score_confidence(Evidence(sources=[]))
+    assert none["quarantine"] is True and none["confidence"] == 0.0
+    weak = score_confidence(Evidence(sources=["inferred"]))
+    assert weak["quarantine"] is True          # below threshold -> not trusted to long-term
+
+
+# --- Reality OS: Memory Economy --------------------------------------------
+def test_memory_economy_value_and_policy():
+    high = memory_value(importance=0.9, confidence=0.9, relationship_weight=0.8, storage_cost=0.1)
+    low = memory_value(importance=0.1, confidence=0.4, relationship_weight=0.0, storage_cost=1.0)
+    assert high > low
+    assert compression_policy(high) == "keep_full"
+    assert compression_policy(low) in ("aggressive_compress", "drop")
+    econ = MemoryEcon("m1", 0.9, 0.9, 0.8, 0.1).evaluate()
+    assert econ["policy"] == "keep_full" and econ["memory_id"] == "m1"
+    print("economy:", high, compression_policy(high), "|", low, compression_policy(low))
+
+
+# --- Reality OS: Memory Versioning -----------------------------------------
+def test_versioning_keeps_temporal_truth():
+    fact = build_fact("favourite_language", [
+        ("Python", "2019-01-01"),
+        ("Rust", "2025-01-01"),
+        ("Julia", "2033-01-01"),
+    ])
+    assert fact.current() == "Julia"
+    assert fact.value_at("2021-06-01") == "Python"     # what was true THEN
+    assert fact.value_at("2026-01-01") == "Rust"
+    assert len(fact.versions) == 3
+    # Previous versions get closed off, never overwritten.
+    assert fact.timeline()[0]["valid_to"] is not None
+    print("versioning:", [v["value"] for v in fact.timeline()])
+
+
+def test_versioning_ignores_unchanged_repeats():
+    fact = VersionedFact("city")
+    fact.record("Delhi", "2020-01-01")
+    fact.record("Delhi", "2021-01-01")   # same value -> no new version
+    assert len(fact.versions) == 1
+
+
+# --- Reality OS: Curiosity Engine ------------------------------------------
+def test_curiosity_detects_gaps_and_asks():
+    gaps = detect_gaps([2008, 2009, 2015, 2016])     # 2010-2014 missing
+    assert gaps == [(2010, 2014)]
+    qs = from_unidentified_people([{"name": "Riya", "mentions": 8, "identified": False}])
+    assert qs and qs[0].kind == "identify" and "Riya" in qs[0].text
+    health = from_repeated_topics([{"name": "Dr Sharma", "mentions": 6, "kind": "health"}])
+    assert health and health[0].kind == "health"
+
+
+def test_curiosity_synthesize_sorts_by_priority():
+    qs = curiosity_synthesize(
+        people=[{"name": "X", "mentions": 10, "identified": False}],
+        topics=[{"name": "PRL", "mentions": 9, "kind": "project"}],
+        years=[2010, 2020],
+    )
+    assert qs == sorted(qs, key=lambda q: -q.priority)
+    assert any(q.kind == "gap" for q in qs)          # the 2011-2019 hole surfaced
+
+
+# --- Reality OS: Reality Compiler ------------------------------------------
+def test_reality_compiler_reports_reductions():
+    counts = {"raw": 1000, "features": 1000, "entities": 200, "events": 120,
+              "patterns": 30, "knowledge": 24, "meaning": 12, "wisdom": 6}
+    rep = pipeline_report(counts)
+    assert [s["stage"] for s in rep["stages"]] == list(STAGES)
+    assert rep["overall_compaction"] == round(1 - 6 / 1000, 4)
+    # entities stage is a big reduction from raw/features.
+    ent = next(s for s in rep["stages"] if s["stage"] == "entities")
+    assert ent["reduction_from_prev"] > 0.5
+    print("compiler compaction:", rep["overall_compaction"])
+
+
+def test_reality_compiler_empty_is_safe():
+    rep = pipeline_report({})
+    assert rep["overall_compaction"] == 0.0
+    assert all(s["count"] == 0 for s in rep["stages"])
 
 
 if __name__ == "__main__":

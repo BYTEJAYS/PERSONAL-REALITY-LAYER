@@ -46,6 +46,36 @@
 | Reality Replay | `reconstructor.py` + `time_machine.py` are the building blocks |
 | Human Knowledge Preservation | Cross-user aggregation; not started |
 
+## Human Reality OS — Evolution Update (21 subsystems)
+
+> Second directive: make PRL an active, self-organising cognitive OS, not a passive store.
+
+| # | Subsystem | Status | Implementation |
+|---|-----------|--------|----------------|
+| 1 | Importance Engine | ✅ BUILT | `importance_engine.py` — 6-factor score (emotional/relationship/financial/historical/frequency/rarity) → `/reality/importance` |
+| 2 | Forgetting Engine | ✅ BUILT | `memory_aging.py` + `memory_economy.py` (drop policy) |
+| 3 | Confidence Engine | ✅ BUILT | `confidence_engine.py` — provenance-weighted trust → `/reality/confidence` |
+| 4 | Source Attribution | 🟡 PARTIAL | `confidence_engine.py` reads provenance; full per-fact source ledger pending |
+| 5 | Memory Versioning | ✅ BUILT | `versioning.py` — temporal truth chains → `/reality/versioning` |
+| 6 | Temporal Knowledge Graph | 🟡 PARTIAL | `knowledge_graph.py` temporal DAG; per-edge time on Neo4j pending |
+| 7 | Curiosity Engine | ✅ BUILT | `curiosity_engine.py` — asks questions → `/reality/curiosity` |
+| 8 | Missing-Memory Detector | ✅ BUILT | `curiosity_engine.detect_gaps` |
+| 9 | Explainability Layer | ✅ BUILT | cross-cutting — every engine emits score+confidence+evidence |
+| 10 | Self-Evolution Engine | 🟡 PARTIAL | `you_model.py`, `self_model.py` learn the user; preference adaptation partial |
+| 11 | Multi-Agent Cognitive Society | 🟡 PARTIAL | the engines *are* the specialists; an orchestration layer is pending |
+| 12 | Reality Integrity Engine | ✅ BUILT | `confidence_engine.py` quarantine of low-confidence claims |
+| 13 | Memory Economy | ✅ BUILT | `memory_economy.py` — value = imp×conf×rel÷cost → `/reality/economy` |
+| 14 | Personal World Model | 🟡 PARTIAL | `brain.py` + `personal_os.py` aggregate; unified world object pending |
+| 15 | Event Simulator | 🟡 PARTIAL | `life_sim.py` trajectories + counterfactuals |
+| 16 | Dream/Thought Capture | 🟡 PARTIAL | `text_ingest.py` captures; dedicated quick-capture surface pending |
+| 17 | Digital Executor | 🔴 GAP | generational inheritance — moonshot |
+| 18 | Collective Intelligence | 🔴 GAP | cross-user foundation models — moonshot |
+| 19 | Reality Compiler | ✅ BUILT | `reality_compiler.py` — raw→…→wisdom pipeline → `/reality/compile` |
+| 20 | Cognitive Compression Engine | ✅ BUILT | `compressor.py` |
+| 21 | Cognitive Information Theory | 🔵 RESEARCH | the discipline these modules collectively prototype |
+
+**Reality-OS score: 11 BUILT · 6 PARTIAL · 2 GAP · 1 research.**
+
 ## Known cross-cutting blockers
 - **Media ingestion** unlocks modules 1 & 11 fully — needs heavy deps (OCR/STT/vision models).
 - **Postgres** (Docker) required to run any DB adapter live — Docker currently uninstalled.

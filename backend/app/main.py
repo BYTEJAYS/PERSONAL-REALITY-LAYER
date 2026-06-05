@@ -10,7 +10,8 @@ from . import graph
 from .config import get_settings
 from .db import init_db
 from .routers import (
-    brain, chat, cognitive, cortex, ingest, insights, memories, memory, reconstruct,
+    brain, chat, cognitive, cortex, ingest, insights, memories, memory, reality,
+    reconstruct,
 )
 
 logging.basicConfig(level=logging.INFO)
@@ -45,6 +46,7 @@ app.include_router(insights.router)
 app.include_router(cognitive.router)
 app.include_router(cortex.router)
 app.include_router(memory.router)
+app.include_router(reality.router)
 
 
 @app.get("/health", tags=["meta"])
@@ -67,5 +69,7 @@ def root():
                       "/memory/events", "/memory/aging", "/memory/duplicates",
                       "/memory/patterns", "/memory/fractal", "/memory/compress",
                       "/memory/reconstruct", "/memory/timemachine",
+                      "/reality/importance", "/reality/confidence", "/reality/economy",
+                      "/reality/versioning", "/reality/curiosity", "/reality/compile",
                       "/brain/state", "/memories", "/reconstruct/{day}", "/ingest/git"],
     }
