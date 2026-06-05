@@ -120,31 +120,43 @@ def _clip(text: str, limit: int = 320) -> str:
     return s[:limit].rsplit(" ", 1)[0].rstrip(",;:") + "…"
 
 
+_PLACEHOLDER_CONTENT = "Jay has worked through some personal feelings here."
+
+
+def _first_sentence(text: str) -> str:
+    return re.split(r"(?<=[.!?])\s+", (text or "").strip())[0].strip()
+
+
 def compose_friend_answer(question: str, evidence: list[dict],
                           mood: str | None = None) -> str:
     """Deterministic, warm fallback answer when no model is reachable — grounded in
-    the (already redacted) evidence, never inventing specifics."""
+    the (already redacted) evidence, never inventing specifics.
+
+    Reads as natural prose: it blends the most relevant memories' CONTENT rather
+    than quoting internal memory titles (which felt robotic). Real fluency needs
+    the LLM path; this just keeps the no-model fallback human-ish."""
     if not evidence:
-        return (f"I'm {COMPANION_NAME} — I know {OWNER_NAME} well, but I don't have "
-                "much on that one. Ask me how he feels about something, or how he'd react.")
-    # Lead with the most relevant memory's actual content so the reply tracks the
-    # question (and varies with it), then tie in the next couple of related ones.
-    top = evidence[0]
-    detail = (top.get("content") or top.get("title") or "").strip()
-    snippet = _clip(detail)
-    others = [e["title"] for e in evidence[1:3]
-              if e.get("title") and e["title"] != top.get("title")]
+        return (f"I'm {COMPANION_NAME} — I know {OWNER_NAME} well, but ask me something "
+                "more specific about him and I'll tell you what I know.")
+    # Lead with the most relevant memory's actual content, then add one more
+    # sentence of texture from a different memory — no internal titles, no
+    # mechanical connectors.
+    lead = _clip((evidence[0].get("content") or evidence[0].get("title") or "").strip())
+    extra = ""
+    for e in evidence[1:4]:
+        c = (e.get("content") or "").strip()
+        if c and c != _PLACEHOLDER_CONTENT and c not in lead:
+            s = _first_sentence(c)
+            if s and s not in lead:
+                extra = s if s[-1:] in ".!?" else s + "."
+                break
     bits = []
-    mood_shown = bool(mood and _FEELING_RX.search(question or ""))
-    if mood_shown:
-        bits.append(f"Honestly, {OWNER_NAME}'s been in a fairly {mood} place lately.")
-    if snippet:
-        bits.append(f"On that — {snippet}" if mood_shown else snippet)
-    elif top.get("title"):
-        bits.append(f"What comes to mind for {OWNER_NAME} is {top['title']}.")
-    if others:
-        bits.append("It connects to " + " and ".join(others) + ".")
-    return " ".join(bits)
+    if mood and _FEELING_RX.search(question or ""):
+        bits.append(f"Honestly, {OWNER_NAME}'s been in a fairly {mood} place lately —")
+    bits.append(lead)
+    if extra:
+        bits.append(extra)
+    return " ".join(b for b in bits if b)
 
 
 # --- DB adapter -------------------------------------------------------------
