@@ -98,5 +98,6 @@ def root():
                       "/reality/world", "/reality/agents", "/reality/ask",
                       "/reality/evolution", "/reality/provenance", "/reality/simulate",
                       "/reality/capture", "/companion/ask", "/companion/about",
+                      "/companion/contribute", "/companion/pending", "/companion/review",
                       "/brain/state", "/memories", "/reconstruct/{day}", "/ingest/git"],
     }

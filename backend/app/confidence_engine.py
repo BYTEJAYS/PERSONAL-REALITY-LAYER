@@ -23,6 +23,7 @@ SOURCE_QUALITY = {
     "git": 0.85, "wearable": 0.8, "health": 0.85,
     "chat": 0.55, "whatsapp": 0.55, "sms": 0.55, "note": 0.5,
     "self-analysis": 0.5, "journal": 0.5, "text": 0.5, "browser": 0.5,
+    "friend-report": 0.3,   # a friend's claim about you — hearsay until you confirm
     "inferred": 0.3, "unknown": 0.3,
 }
 QUARANTINE_THRESHOLD = 0.35   # below this a claim is not trusted into long-term store

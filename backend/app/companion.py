@@ -121,8 +121,10 @@ def ask(db, question: str, use_llm: bool = True) -> dict:
     from . import llm
 
     # Retrieve a small, relevant slice (recent + simple keyword overlap), then redact.
+    # Quarantined / question rows are inert and must never reach an answer.
     rows = db.execute(
         select(Memory.source, Memory.title, Memory.content, Memory.meta, Memory.emotion)
+        .where(Memory.source.notin_(("quarantine", "friend-question")))
         .order_by(Memory.ts.desc()).limit(40)
     ).all()
     q = question.lower()

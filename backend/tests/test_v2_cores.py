@@ -78,6 +78,7 @@ from app.companion import (  # noqa: E402
     compose_friend_answer,
 )
 from app.auth import parse_tokens, classify_token  # noqa: E402
+from app.feedback import classify_submission, assess_submission  # noqa: E402
 
 
 def test_self_model_extracts_claims_with_polarity():
@@ -1141,6 +1142,24 @@ def test_auth_token_roles():
     assert classify_token("alice123", "owner-secret", friends) == "friend"
     assert classify_token("stranger", "owner-secret", friends) is None
     assert classify_token(None, "owner-secret", friends) is None
+
+
+# --- Friend feedback loop: quarantine before truth -------------------------
+def test_feedback_classifies_submissions():
+    assert classify_submission("Does Jay like hiking?") == "question"
+    assert classify_submission("Actually he hates coriander") == "correction"
+    assert classify_submission("Jay went to Japan last summer") == "fact"
+    assert classify_submission("") == "empty"
+
+
+def test_feedback_facts_quarantine_questions_log():
+    fact = assess_submission("Jay loves jazz", submitter="Sam")
+    assert fact["kind"] == "fact" and fact["status"] == "quarantined"
+    assert fact["submitter"] == "Sam"
+    # A friend's claim is low-trust hearsay until the owner confirms.
+    assert fact["confidence"] < 0.5
+    q = assess_submission("What music does Jay like?")
+    assert q["kind"] == "question" and q["status"] == "logged"
 
 
 if __name__ == "__main__":

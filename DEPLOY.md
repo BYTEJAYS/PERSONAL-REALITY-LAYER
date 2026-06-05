@@ -116,6 +116,18 @@ curl -X POST https://<api>/companion/ask \
 ```
 A friend hitting `/cortex/finance` or `/memories` gets `403 Owner access only`.
 
+**Friends help it learn (without being able to rewrite you):**
+- `POST /companion/contribute` `{ "text": "...", "submitter": "Sam" }` — a friend
+  shares something about you. Facts/corrections land in **quarantine** (stored
+  inert: no embedding, no links, never used in answers); questions are just logged.
+- `GET /companion/pending` (owner) — your review queue.
+- `POST /companion/review` (owner) `{ "memory_id": "...", "approve": true }` —
+  approve → it becomes a real memory, credited to the friend and marked verified;
+  reject → discarded. Nothing a friend says is treated as true about you until you
+  confirm it.
+- `GET /companion/questions` (owner) — what friends keep asking (signal for what
+  to fill in).
+
 **Still on you (not technical):** the people in your data (family, friends,
 doctor) didn't consent to being queried. The redaction softens their details, but
 consider telling the friends you invite what this is — and only invite people you

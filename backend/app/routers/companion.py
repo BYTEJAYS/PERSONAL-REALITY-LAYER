@@ -10,8 +10,8 @@ from fastapi import APIRouter, Depends
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
-from .. import companion
-from ..auth import require_companion
+from .. import companion, feedback
+from ..auth import require_companion, require_owner
 from ..db import get_db
 
 router = APIRouter(prefix="/companion", tags=["companion"])
@@ -21,10 +21,46 @@ class AskIn(BaseModel):
     question: str
 
 
+class ContributeIn(BaseModel):
+    text: str
+    submitter: str = "friend"
+
+
+class ReviewIn(BaseModel):
+    memory_id: str
+    approve: bool
+    importance: float = 0.5
+
+
 @router.post("/ask")
 def ask(body: AskIn, role: str = Depends(require_companion), db: Session = Depends(get_db)):
     """Ask Jay's companion about him — discreetly grounded in everything it knows."""
     return companion.ask(db, body.question)
+
+
+@router.post("/contribute")
+def contribute(body: ContributeIn, role: str = Depends(require_companion),
+               db: Session = Depends(get_db)):
+    """A friend shares something about Jay. Held in quarantine until Jay confirms."""
+    return feedback.submit(db, body.text, body.submitter)
+
+
+@router.get("/pending")
+def pending(role: str = Depends(require_owner), db: Session = Depends(get_db)):
+    """Owner: friend contributions awaiting your review."""
+    return feedback.pending(db)
+
+
+@router.get("/questions")
+def friend_questions(role: str = Depends(require_owner), db: Session = Depends(get_db)):
+    """Owner: what friends have been asking about you."""
+    return feedback.questions(db)
+
+
+@router.post("/review")
+def review(body: ReviewIn, role: str = Depends(require_owner), db: Session = Depends(get_db)):
+    """Owner: approve (→ real, attributed memory) or reject a quarantined claim."""
+    return feedback.review(db, body.memory_id, body.approve, body.importance)
 
 
 @router.get("/about")
