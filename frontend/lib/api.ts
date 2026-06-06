@@ -291,6 +291,68 @@ export async function fetchFriendQuestions(token: string): Promise<QuestionsResp
   return companionGet<QuestionsResp>("/companion/questions", token);
 }
 
+// --- Journal (owner-only; private to Jay, never quoted to friends) ----------
+
+export interface JournalEntrySummary {
+  id: string;
+  title: string;
+  emotion?: string | null;
+  importance?: number;
+  categories: string[];
+  people: string[];
+  event_count: number;
+}
+export interface JournalDay {
+  date: string; // YYYY-MM-DD
+  entries: JournalEntrySummary[];
+}
+export interface TimelineResp {
+  ready: boolean;
+  window_days: number;
+  entry_count: number;
+  days: JournalDay[];
+}
+export async function fetchTimeline(token: string, days = 60): Promise<TimelineResp> {
+  return companionGet<TimelineResp>(`/journal?days=${days}`, token);
+}
+
+export interface AddJournalResp {
+  ok: boolean;
+  message?: string;
+  memory_id?: string | null;
+  date?: string;
+  emotion?: string | null;
+  categories?: string[];
+  people?: string[];
+  goals_detected?: string[];
+}
+export async function addJournal(
+  token: string,
+  text: string,
+  emotion?: string,
+): Promise<AddJournalResp> {
+  const body: { text: string; emotion?: string } = { text };
+  if (emotion && emotion.trim()) body.emotion = emotion.trim();
+  return companionPost<AddJournalResp>("/journal", token, body);
+}
+
+export interface ReflectionResp {
+  ready: boolean;
+  date?: string;
+  message?: string;
+  wins?: string[];
+  challenges?: string[];
+  lessons?: string[];
+  gratitude?: string[];
+  suggestions?: string[];
+  narrative?: string;
+}
+// Reflection runs the LLM over the day's entries — give it room (Mac/Ollama is slow).
+export async function fetchReflection(token: string, date?: string): Promise<ReflectionResp> {
+  const q = date ? `?date=${encodeURIComponent(date)}` : "";
+  return companionGet<ReflectionResp>(`/journal/reflection${q}`, token, 90000);
+}
+
 export interface ReviewResp {
   id: string;
   decision: string;
