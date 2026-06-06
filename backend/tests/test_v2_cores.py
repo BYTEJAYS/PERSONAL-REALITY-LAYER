@@ -581,14 +581,20 @@ def test_truthhood_components_present_and_scored():
 from app.council_of_minds import deliberate as council_deliberate, MINDS  # noqa: E402
 
 
-def test_council_all_minds_weigh_in():
+def test_council_all_minds_weigh_in_with_stances():
     out = council_deliberate("Should I start a new project?", [], [], [])
     assert len(out["takes"]) == len(MINDS)
-    # With no data every mind still produces a non-empty take (its lens question).
     assert all(t["take"].strip() for t in out["takes"])
+    # Every mind takes a stance, and they are not all identical (genuine diversity).
+    stances = {t["stance"] for t in out["takes"]}
+    assert len(stances) >= 3
+    # The Critic always opposes; the Entrepreneur always pushes to act.
+    crit = next(t for t in out["takes"] if t["mind"] == "Critic")
+    ent = next(t for t in out["takes"] if t["mind"] == "Entrepreneur")
+    assert crit["stance"] in ("against", "caution") and ent["stance"] == "for"
 
 
-def test_council_grounds_takes_in_principles():
+def test_council_surfaces_conflict_and_dissent():
     principles = [
         {"key": "habit:Gym", "statement": "Gym lifts your weeks.", "category": "growth_driver",
          "confidence": 0.8, "evidence_count": 10, "status": "active"},
@@ -597,18 +603,22 @@ def test_council_grounds_takes_in_principles():
     ]
     cmds = [{"statement": "Protect your focus."}]
     out = council_deliberate("Should I start a new project?", principles, ["going deep"], cmds)
-    drawn = {k for t in out["takes"] for k in t["draws_on"]}
-    assert "habit:Gym" in drawn or "decision:busy_start:neg" in drawn
-    # Philosopher leans on the value profile.
+    # Optimist (for) vs Critic (against) → a genuine split with a named dissent.
+    assert out["split"] is True
+    assert out["dissent"] is not None
+    # The Critic grounds its objection in the pitfall principle.
+    crit = next(t for t in out["takes"] if t["mind"] == "Critic")
+    assert "decision:busy_start:neg" in crit["draws_on"]
+    # Philosopher leans on the value profile; synthesis cites the top commandment.
     phil = next(t for t in out["takes"] if t["mind"] == "Philosopher")
     assert "going deep" in phil["take"]
-    # Synthesis references the top commandment.
     assert "Protect your focus." in out["synthesis"]
 
 
-def test_council_synthesis_honest_when_empty():
+def test_council_split_when_empty():
     out = council_deliberate("What should I do?", [], [], [])
-    assert "Not enough recorded" in out["synthesis"]
+    assert out["split"] is True  # biases alone produce disagreement
+    assert "Nothing recorded yet" in out["synthesis"]
 
 
 def test_knowledge_graph_recovers_evolution_spine():
