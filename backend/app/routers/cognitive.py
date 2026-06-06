@@ -20,6 +20,7 @@ from .. import (
     principle_engine,
     self_model,
     trend_engine,
+    truth_engine,
     wisdom_engine,
     you_model,
 )
@@ -109,6 +110,14 @@ def get_philosophy(db: Session = Depends(get_db)):
     """Philosophy evolution & contradictions: how your principles have collided
     (opposing/revised/abandoned) and changed over time, read from their history."""
     return philosophy_engine.build(db)
+
+
+@router.get("/truths")
+def get_truths(db: Session = Depends(get_db)):
+    """Truths (Meta-Wisdom apex): principles that survived long enough, with enough
+    evidence from enough independent sources, uncontradicted — plus 'emerging truths'
+    with their progress toward truth-hood."""
+    return truth_engine.build(db)
 
 
 @router.get("/os")

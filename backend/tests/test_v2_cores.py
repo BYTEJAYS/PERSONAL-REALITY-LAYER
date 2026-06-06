@@ -532,6 +532,51 @@ def test_timeline_orders_and_groups_by_month():
     assert "formed" in pmap["2026-01"]["summary"]
 
 
+# --- Truth Extraction Engine -----------------------------------------------
+from app.truth_engine import classify as truth_classify, truthhood as truth_score  # noqa: E402
+
+
+def _strong_principle(**kw):
+    base = {"key": "k", "statement": "s", "category": "philosophy", "confidence": 0.9,
+            "evidence_count": 30, "status": "active", "sources": ["a", "b", "c"],
+            "first_seen": "2024-01-01T00:00:00+00:00", "history": []}
+    base.update(kw)
+    return base
+
+
+def test_truth_promotes_long_lived_well_evidenced_principle():
+    now = "2026-06-01T00:00:00+00:00"  # ~2.4y after first_seen
+    truths, emerging = truth_classify([_strong_principle()], [], now)
+    assert len(truths) == 1 and emerging == []
+    assert truths[0]["truthhood"] >= 0.7
+
+
+def test_truth_emerging_when_young_or_thin():
+    now = "2024-02-01T00:00:00+00:00"  # only ~1 month old, little evidence
+    p = _strong_principle(evidence_count=2, sources=["a"], confidence=0.4)
+    truths, emerging = truth_classify([p], [], now)
+    assert truths == [] and len(emerging) == 1
+    assert emerging[0]["to_truth"] > 0  # shows remaining gap
+
+
+def test_truth_excludes_contradicted_even_if_strong():
+    now = "2026-06-01T00:00:00+00:00"
+    p = _strong_principle(key="decision:collaborative:pos")
+    contradictions = [{"type": "opposing", "keys": ["decision:collaborative:pos",
+                                                    "decision:collaborative:neg"]}]
+    truths, emerging = truth_classify([p], contradictions, now)
+    assert truths == []  # contested → can't be a truth
+    assert emerging[0]["contradicted"] is True
+
+
+def test_truthhood_components_present_and_scored():
+    now = "2026-06-01T00:00:00+00:00"
+    score, comp = truth_score(_strong_principle(), now, set())
+    assert 0.0 <= score <= 1.0
+    assert set(comp) == {"confidence", "evidence", "longevity", "sources", "stability"}
+    assert comp["stability"] == 1.0
+
+
 def test_knowledge_graph_recovers_evolution_spine():
     # first_seen as day-offsets; the spec's chain co-occurs sequentially.
     chain = ["Python", "FastAPI", "Backend", "Fraud Detection", "ML", "Graph Intelligence", "PRL"]

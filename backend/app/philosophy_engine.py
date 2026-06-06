@@ -51,6 +51,7 @@ def detect_contradictions(principles: list[dict]) -> list[dict]:
             out.append({
                 "type": "opposing",
                 "axis": axis,
+                "keys": [p.get("key"), opp.get("key")],
                 "statements": [p.get("statement"), opp.get("statement")],
                 "current_lean": winner.get("statement"),
                 "detail": "Two opposite reads on the same thing — you currently lean toward "
