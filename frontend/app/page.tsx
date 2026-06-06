@@ -42,7 +42,12 @@ export default function Page() {
     setBusy(true);
     try {
       if (mode === "ask") {
-        const r = await askCompanion(token, text);
+        // Send the recent conversation so Jerry can follow the thread.
+        const history = msgs
+          .filter((m) => m.who === "you" || m.who === "jay")
+          .map((m) => ({ role: (m.who === "you" ? "user" : "assistant") as "user" | "assistant", content: m.text }))
+          .slice(-6);
+        const r = await askCompanion(token, text, history);
         setMsgs((m) => [...m, { who: "jay", text: r.answer }]);
       } else {
         const r = await correctCompanion(token, text, "friend");

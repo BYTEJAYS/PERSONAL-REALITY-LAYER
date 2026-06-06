@@ -23,14 +23,19 @@ def available() -> bool:
 
 
 def complete(system: str, user: str, *, temperature: float = 0.3,
-             max_tokens: int | None = None) -> str | None:
-    """Return the model's text answer, or None if no model is reachable."""
+             max_tokens: int | None = None,
+             history: list[dict] | None = None) -> str | None:
+    """Return the model's text answer, or None if no model is reachable.
+
+    `history` is an optional list of prior {"role","content"} turns (oldest→
+    newest) inserted before the final user message, for conversational memory.
+    """
     provider = settings.llm_provider
     try:
         if provider == "ollama":
-            return _ollama(system, user, temperature, max_tokens)
+            return _ollama(system, user, temperature, max_tokens, history)
         if provider == "anthropic" and settings.anthropic_api_key:
-            return _anthropic(system, user, temperature, max_tokens)
+            return _anthropic(system, user, temperature, max_tokens, history)
     except Exception as exc:  # noqa: BLE001 — the model is never allowed to break a reply
         # Any failure (unreachable host, bad URL, malformed response, timeout,
         # IPv6/DNS error) must degrade to the deterministic answer, never 500.
@@ -39,19 +44,29 @@ def complete(system: str, user: str, *, temperature: float = 0.3,
     return None
 
 
+def _clean_history(history: list[dict] | None) -> list[dict]:
+    """Keep only well-formed user/assistant turns."""
+    out = []
+    for t in history or []:
+        role, content = t.get("role"), (t.get("content") or "").strip()
+        if role in ("user", "assistant") and content:
+            out.append({"role": role, "content": content})
+    return out
+
+
 def _ollama(system: str, user: str, temperature: float,
-            max_tokens: int | None = None) -> str:
+            max_tokens: int | None = None, history: list[dict] | None = None) -> str:
     options: dict = {"temperature": temperature}
     if max_tokens:
         options["num_predict"] = max_tokens
+    messages = [{"role": "system", "content": system}]
+    messages.extend(_clean_history(history))
+    messages.append({"role": "user", "content": user})
     resp = httpx.post(
         f"{settings.ollama_url}/api/chat",
         json={
             "model": settings.llm_model,
-            "messages": [
-                {"role": "system", "content": system},
-                {"role": "user", "content": user},
-            ],
+            "messages": messages,
             "stream": False,
             "options": options,
         },
@@ -62,7 +77,8 @@ def _ollama(system: str, user: str, temperature: float,
 
 
 def _anthropic(system: str, user: str, temperature: float,
-               max_tokens: int | None = None) -> str:
+               max_tokens: int | None = None, history: list[dict] | None = None) -> str:
+    messages = _clean_history(history) + [{"role": "user", "content": user}]
     resp = httpx.post(
         "https://api.anthropic.com/v1/messages",
         headers={
@@ -76,7 +92,7 @@ def _anthropic(system: str, user: str, temperature: float,
             "temperature": temperature,
             # Cache the (stable) system prompt to cut latency/cost on repeat calls.
             "system": [{"type": "text", "text": system, "cache_control": {"type": "ephemeral"}}],
-            "messages": [{"role": "user", "content": user}],
+            "messages": messages,
         },
         timeout=60,
     )

@@ -17,8 +17,14 @@ from ..db import get_db
 router = APIRouter(prefix="/companion", tags=["companion"])
 
 
+class ChatTurn(BaseModel):
+    role: str   # "user" | "assistant"
+    content: str
+
+
 class AskIn(BaseModel):
     question: str
+    history: list[ChatTurn] = []   # prior turns, oldest→newest, for continuity
 
 
 class ContributeIn(BaseModel):
@@ -35,7 +41,9 @@ class ReviewIn(BaseModel):
 @router.post("/ask")
 def ask(body: AskIn, role: str = Depends(require_companion), db: Session = Depends(get_db)):
     """Ask Jay's companion about him — discreetly grounded in everything it knows."""
-    return companion.ask(db, body.question)
+    # Keep only the most recent turns so the prompt stays small.
+    history = [{"role": t.role, "content": t.content} for t in body.history][-6:]
+    return companion.ask(db, body.question, history=history)
 
 
 @router.post("/contribute")

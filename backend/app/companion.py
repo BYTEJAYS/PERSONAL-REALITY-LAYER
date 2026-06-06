@@ -172,7 +172,7 @@ def compose_friend_answer(question: str, evidence: list[dict],
 
 
 # --- DB adapter -------------------------------------------------------------
-def ask(db, question: str, use_llm: bool = True) -> dict:
+def ask(db, question: str, use_llm: bool = True, history: list[dict] | None = None) -> dict:
     from sqlalchemy import select
     from .models import Memory
     from . import llm
@@ -236,7 +236,7 @@ def ask(db, question: str, use_llm: bool = True) -> dict:
             f"Reply as {COMPANION_NAME} — naturally and briefly, like a real friend in a chat. "
             "Answer only what they asked; don't volunteer a rundown of everything you know."
         )
-        out = llm.complete(system, user, temperature=0.7, max_tokens=220)
+        out = llm.complete(system, user, temperature=0.7, max_tokens=220, history=history)
         if out:
             answer, by = out, "llm"
     if not answer:
