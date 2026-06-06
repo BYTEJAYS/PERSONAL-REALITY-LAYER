@@ -15,6 +15,7 @@ from .. import (
     life_sim,
     pattern_engine,
     personal_os,
+    philosophy_engine,
     prediction_engine,
     principle_engine,
     self_model,
@@ -101,6 +102,13 @@ def get_principles(db: Session = Depends(get_db)):
     how each strengthened/weakened) + your Personal Commandments. Reconciles fresh
     wisdom into the standing set and records the evolution."""
     return principle_engine.build(db)
+
+
+@router.get("/philosophy")
+def get_philosophy(db: Session = Depends(get_db)):
+    """Philosophy evolution & contradictions: how your principles have collided
+    (opposing/revised/abandoned) and changed over time, read from their history."""
+    return philosophy_engine.build(db)
 
 
 @router.get("/os")

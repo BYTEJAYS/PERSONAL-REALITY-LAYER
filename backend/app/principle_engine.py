@@ -80,7 +80,8 @@ def reconcile(existing: list[dict], candidates: list[dict], now_iso: str) -> tup
                 "sources": list(c.get("sources", [])),
                 "first_seen": now_iso,
                 "last_reinforced": now_iso,
-                "history": [{"ts": now_iso, "confidence": conf, "evidence_count": ec, "event": "formed"}],
+                "history": [{"ts": now_iso, "confidence": conf, "evidence_count": ec,
+                             "event": "formed", "statement": c["statement"]}],
             }
             events.append({"key": key, "event": "formed", "statement": c["statement"]})
         else:
@@ -88,12 +89,21 @@ def reconcile(existing: list[dict], candidates: list[dict], now_iso: str) -> tup
             # Evidence only accumulates — never lose ground already earned.
             ec = max(int(prev.get("evidence_count", 1)), ec)
             history = list(prev.get("history", []))
-            event = ("strengthened" if conf - old_conf >= _DELTA else
-                     "weakened" if old_conf - conf >= _DELTA else None)
-            if event:
-                history.append({"ts": now_iso, "confidence": conf, "evidence_count": ec, "event": event})
-                events.append({"key": key, "event": event, "statement": c["statement"],
+            conf_event = ("strengthened" if conf - old_conf >= _DELTA else
+                          "weakened" if old_conf - conf >= _DELTA else None)
+            if conf_event:
+                history.append({"ts": now_iso, "confidence": conf, "evidence_count": ec,
+                                "event": conf_event, "statement": c["statement"]})
+                events.append({"key": key, "event": conf_event, "statement": c["statement"],
                                "from": old_conf, "to": conf})
+            # A reworded principle = a belief that has been updated (philosophy shift).
+            old_stmt = (prev.get("statement") or "").strip().lower()
+            if c["statement"].strip().lower() != old_stmt:
+                history.append({"ts": now_iso, "confidence": conf, "evidence_count": ec,
+                                "event": "revised", "statement": c["statement"],
+                                "previous": prev.get("statement")})
+                events.append({"key": key, "event": "revised", "statement": c["statement"],
+                               "previous": prev.get("statement")})
             p = {
                 **prev,
                 "statement": c["statement"],
@@ -121,7 +131,8 @@ def reconcile(existing: list[dict], candidates: list[dict], now_iso: str) -> tup
         status = "dormant" if new_conf < 0.2 else "weakening"
         history = list(e.get("history", []))
         history.append({"ts": now_iso, "confidence": new_conf,
-                        "evidence_count": e.get("evidence_count", 1), "event": "faded"})
+                        "evidence_count": e.get("evidence_count", 1), "event": "faded",
+                        "statement": e.get("statement", "")})
         events.append({"key": key, "event": "faded", "statement": e.get("statement", "")})
         out.append({**e, "confidence": new_conf, "status": status, "history": history})
 

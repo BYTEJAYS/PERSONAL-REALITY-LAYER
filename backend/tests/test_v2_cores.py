@@ -468,6 +468,70 @@ def test_commandments_rank_and_diversify():
     assert "d" not in keys  # below threshold / weakening dropped
 
 
+def test_principle_revision_logged_in_history():
+    now1 = "2026-01-01T00:00:00+00:00"
+    p, _ = pr_reconcile([], [{"key": "values", "statement": "You value money.",
+                              "category": "philosophy", "confidence": 0.6,
+                              "strength": 0.6, "evidence_count": 5}], now1)
+    now2 = "2026-06-01T00:00:00+00:00"
+    p2, events = pr_reconcile(p, [{"key": "values", "statement": "You value freedom.",
+                                   "category": "philosophy", "confidence": 0.6,
+                                   "strength": 0.6, "evidence_count": 5}], now2)
+    hist = p2[0]["history"]
+    rev = [h for h in hist if h["event"] == "revised"]
+    assert rev and rev[-1]["previous"] == "You value money." and rev[-1]["statement"] == "You value freedom."
+    assert any(e["event"] == "revised" for e in events)
+
+
+# --- Philosophy / Contradiction Engine -------------------------------------
+from app.philosophy_engine import detect_contradictions, build_timeline  # noqa: E402
+
+
+def test_contradiction_detects_opposing_axis():
+    principles = [
+        {"key": "decision:collaborative:pos", "statement": "You finish more with others.",
+         "confidence": 0.7, "status": "active", "history": []},
+        {"key": "decision:collaborative:neg", "statement": "You finish more solo.",
+         "confidence": 0.4, "status": "active", "history": []},
+    ]
+    cons = detect_contradictions(principles)
+    opp = [c for c in cons if c["type"] == "opposing"]
+    assert len(opp) == 1
+    assert opp[0]["current_lean"] == "You finish more with others."  # higher confidence wins
+
+
+def test_contradiction_revision_and_abandoned():
+    principles = [
+        {"key": "values", "statement": "You value freedom.", "confidence": 0.6, "status": "active",
+         "history": [{"event": "formed", "statement": "You value money.", "ts": "2026-01-01T00:00:00+00:00"},
+                     {"event": "revised", "previous": "You value money.",
+                      "statement": "You value freedom.", "ts": "2026-06-01T00:00:00+00:00"}]},
+        {"key": "habit:Gym", "statement": "Gym lifts your weeks.", "confidence": 0.15,
+         "status": "dormant",
+         "history": [{"event": "strengthened", "statement": "Gym lifts your weeks.",
+                      "ts": "2026-02-01T00:00:00+00:00"}]},
+    ]
+    cons = detect_contradictions(principles)
+    kinds = {c["type"] for c in cons}
+    assert "revision" in kinds and "abandoned" in kinds
+
+
+def test_timeline_orders_and_groups_by_month():
+    principles = [
+        {"key": "a", "statement": "A", "category": "lesson",
+         "history": [{"event": "formed", "ts": "2026-01-15T00:00:00+00:00", "confidence": 0.5, "statement": "A"},
+                     {"event": "strengthened", "ts": "2026-03-02T00:00:00+00:00", "confidence": 0.7, "statement": "A"}]},
+        {"key": "b", "statement": "B", "category": "lesson",
+         "history": [{"event": "formed", "ts": "2026-01-20T00:00:00+00:00", "confidence": 0.4, "statement": "B"}]},
+    ]
+    events, periods = build_timeline(principles)
+    assert [e["ts"] for e in events] == sorted(e["ts"] for e in events)  # chronological
+    pmap = {p["period"]: p for p in periods}
+    assert "2026-01" in pmap and "2026-03" in pmap
+    assert len(pmap["2026-01"]["events"]) == 2  # A formed + B formed
+    assert "formed" in pmap["2026-01"]["summary"]
+
+
 def test_knowledge_graph_recovers_evolution_spine():
     # first_seen as day-offsets; the spec's chain co-occurs sequentially.
     chain = ["Python", "FastAPI", "Backend", "Fraud Detection", "ML", "Graph Intelligence", "PRL"]
