@@ -42,6 +42,12 @@ def get_day(day: str, db: Session = Depends(get_db)):
     return journal.get_day(db, day)
 
 
+@router.delete("/{entry_id}")
+def delete_entry(entry_id: str, db: Session = Depends(get_db)):
+    """Delete one journal entry by id (owner-only via the global guard)."""
+    return journal.delete_entry(db, entry_id)
+
+
 @router.get("/reflection")
 def get_reflection(
     date: str | None = Query(None, description="YYYY-MM-DD; defaults to today"),

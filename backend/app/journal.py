@@ -349,6 +349,25 @@ def timeline(db, days: int = 30) -> dict:
     }
 
 
+def delete_entry(db, entry_id: str) -> dict:
+    """Delete one journal entry by id. Scoped to ``journal`` memories so this can
+    never remove non-journal data; the cascade drops its entity links too."""
+    import uuid as _uuid
+
+    from .models import Memory
+
+    try:
+        mid = _uuid.UUID(str(entry_id))
+    except (ValueError, AttributeError):
+        return {"ok": False, "message": "Not a valid entry id."}
+    m = db.get(Memory, mid)
+    if m is None or m.source != "journal":
+        return {"ok": False, "message": "No journal entry with that id."}
+    db.delete(m)
+    db.commit()
+    return {"ok": True, "deleted": str(mid)}
+
+
 def get_day(db, day: str) -> dict:
     """All journal entries (with their extracted events) for one YYYY-MM-DD."""
     from datetime import date, timedelta
