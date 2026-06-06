@@ -5,6 +5,7 @@ import { useFrame, useLoader } from "@react-three/fiber";
 import * as THREE from "three";
 import { OBJLoader } from "three/examples/jsm/loaders/OBJLoader.js";
 import { MeshSurfaceSampler } from "three/examples/jsm/math/MeshSurfaceSampler.js";
+import { fireTarget } from "@/lib/brainActivity";
 
 const SURFACE = 200000; // dense sampling so the folds resolve clearly
 const DUST = 48000;     // dispersing halo lifting off the surface
@@ -14,18 +15,22 @@ const vertexShader = /* glsl */ `
   uniform float uTime;
   uniform float uSize;
   uniform float uPixelRatio;
+  uniform float uActive;     // 0..1 — chat-driven "firing" level
   attribute float aSeed;
   attribute float aPSize;
   attribute float aBright;
   attribute vec3  aNormal;   // surface normal (zero for free dust)
   varying float vBright;
+  varying float vActive;
 
   void main() {
     vec3 pos = position;
     float t = uTime * 0.5 + aSeed;
-    pos.x += sin(t * 1.3 + aSeed) * 0.0035;
-    pos.y += cos(t * 1.1 + aSeed * 1.7) * 0.0035;
-    pos.z += sin(t * 0.9) * 0.0035;
+    // Drift grows a little when Jerry's thinking, so the brain visibly stirs.
+    float wobble = 0.0035 + uActive * 0.0045;
+    pos.x += sin(t * 1.3 + aSeed) * wobble;
+    pos.y += cos(t * 1.1 + aSeed * 1.7) * wobble;
+    pos.z += sin(t * 0.9) * wobble;
 
     vec4 mv = modelViewMatrix * vec4(pos, 1.0);
 
@@ -41,10 +46,16 @@ const vertexShader = /* glsl */ `
     shade = mix(1.0, shade, isSurf);
 
     float tw = 0.82 + 0.18 * sin(uTime * 2.0 + aSeed * 6.2831);
-    vBright = aBright * shade * tw;
 
-    gl_PointSize = uSize * aPSize * uPixelRatio * (3.0 / -mv.z);
-    gl_PointSize = clamp(gl_PointSize, 0.0, 6.0);
+    // Firing: a wave of brightness sweeps front→back through the brain while
+    // active, so it looks like thought propagating, not just a flat glow.
+    float wave = 0.5 + 0.5 * sin(uTime * 5.0 - pos.z * 4.5 + aSeed * 0.6);
+    float fire = uActive * (0.45 + 0.55 * wave);
+    vBright = aBright * shade * tw * (1.0 + fire * 1.5);
+    vActive = uActive;
+
+    gl_PointSize = uSize * aPSize * uPixelRatio * (3.0 / -mv.z) * (1.0 + uActive * 0.45);
+    gl_PointSize = clamp(gl_PointSize, 0.0, 7.0);
     gl_Position = projectionMatrix * mv;
   }
 `;
@@ -52,12 +63,17 @@ const vertexShader = /* glsl */ `
 const fragmentShader = /* glsl */ `
   precision mediump float;
   varying float vBright;
+  varying float vActive;
   void main() {
     vec2 uv = gl_PointCoord - 0.5;
     float d = length(uv);
     if (d > 0.5) discard;
     float core = smoothstep(0.5, 0.0, d);
-    vec3 col = vec3(0.84, 0.9, 1.0) * (0.45 + vBright);
+    // Idle = cool blue-white; firing shifts a touch warmer/brighter so the
+    // reaction reads as energy, not just exposure.
+    vec3 idle = vec3(0.84, 0.9, 1.0);
+    vec3 hot  = vec3(0.62, 0.82, 1.0);
+    vec3 col = mix(idle, hot, clamp(vActive, 0.0, 1.0)) * (0.45 + vBright);
     gl_FragColor = vec4(col, core * clamp(vBright, 0.0, 1.0));
   }
 `;
@@ -144,12 +160,18 @@ export function ParticleBrain() {
       uTime: { value: 0 },
       uSize: { value: 1.9 },
       uPixelRatio: { value: typeof window !== "undefined" ? Math.min(window.devicePixelRatio, 2) : 1 },
+      uActive: { value: 0 },
     }),
     [],
   );
 
   useFrame((_, delta) => {
-    if (matRef.current) matRef.current.uniforms.uTime.value += delta;
+    if (!matRef.current) return;
+    const u = matRef.current.uniforms;
+    u.uTime.value += delta;
+    // Ease toward the chat-driven fire level so it ramps in/out smoothly.
+    const target = fireTarget();
+    u.uActive.value += (target - u.uActive.value) * Math.min(1, delta * 4);
   });
 
   return (

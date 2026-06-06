@@ -6,7 +6,10 @@ a best-friend's discretion (no raw finances/medical/private reflections).
 
 from __future__ import annotations
 
+import json
+
 from fastapi import APIRouter, Depends
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
@@ -44,6 +47,32 @@ def ask(body: AskIn, role: str = Depends(require_companion), db: Session = Depen
     # Keep only the most recent turns so the prompt stays small.
     history = [{"role": t.role, "content": t.content} for t in body.history][-6:]
     return companion.ask(db, body.question, history=history)
+
+
+@router.post("/ask/stream")
+def ask_stream(body: AskIn, role: str = Depends(require_companion),
+               db: Session = Depends(get_db)):
+    """Same as /ask, but streams the reply token-by-token over SSE so the UI can
+    show Jerry 'talking' instead of a dead pause then a wall of text. The DB work
+    happens up-front; only the model output streams. Clients that don't get a
+    stream (older deploys) just use /ask — this endpoint is purely additive."""
+    history = [{"role": t.role, "content": t.content} for t in body.history][-6:]
+    # Build the answer context now, while the DB session is live; the generator
+    # below only talks to the model, so the session isn't held during streaming.
+    ctx = companion.build_context(db, body.question)
+
+    def events():
+        for kind, payload in companion.stream_answer(ctx, history=history):
+            if kind == "delta":
+                yield f"data: {json.dumps({'delta': payload})}\n\n"
+            else:
+                yield f"data: {json.dumps({'done': True, **payload})}\n\n"
+
+    return StreamingResponse(
+        events(),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
 
 
 @router.post("/contribute")

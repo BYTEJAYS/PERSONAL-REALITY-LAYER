@@ -8,7 +8,9 @@ back to deterministic, evidence-grounded answers — so the product never hard
 
 from __future__ import annotations
 
+import json
 import logging
+from typing import Iterator
 
 import httpx
 
@@ -42,6 +44,61 @@ def complete(system: str, user: str, *, temperature: float = 0.3,
         log.warning("LLM call failed (%s: %s); using deterministic fallback: %s",
                     provider, type(exc).__name__, exc)
     return None
+
+
+def stream(system: str, user: str, *, temperature: float = 0.3,
+           max_tokens: int | None = None,
+           history: list[dict] | None = None) -> Iterator[str]:
+    """Yield the model's answer in text chunks as it's generated.
+
+    Empty (yields nothing) if no model is reachable or the provider doesn't
+    stream — callers detect that and fall back. Ollama streams natively; for
+    Anthropic we keep it simple and yield the whole answer once.
+    """
+    provider = settings.llm_provider
+    try:
+        if provider == "ollama":
+            yield from _ollama_stream(system, user, temperature, max_tokens, history)
+            return
+        if provider == "anthropic" and settings.anthropic_api_key:
+            out = _anthropic(system, user, temperature, max_tokens, history)
+            if out:
+                yield out
+            return
+    except Exception as exc:  # noqa: BLE001 — streaming must never raise out of here
+        log.warning("LLM stream failed (%s: %s); caller will fall back: %s",
+                    provider, type(exc).__name__, exc)
+    return
+
+
+def _ollama_stream(system: str, user: str, temperature: float,
+                   max_tokens: int | None, history: list[dict] | None) -> Iterator[str]:
+    options: dict = {"temperature": temperature}
+    if max_tokens:
+        options["num_predict"] = max_tokens
+    messages = [{"role": "system", "content": system}]
+    messages.extend(_clean_history(history))
+    messages.append({"role": "user", "content": user})
+    with httpx.stream(
+        "POST",
+        f"{settings.ollama_url}/api/chat",
+        json={"model": settings.llm_model, "messages": messages,
+              "stream": True, "options": options},
+        timeout=httpx.Timeout(60.0, read=120.0),
+    ) as resp:
+        resp.raise_for_status()
+        for line in resp.iter_lines():
+            if not line:
+                continue
+            try:
+                data = json.loads(line)
+            except ValueError:
+                continue
+            chunk = (data.get("message") or {}).get("content", "")
+            if chunk:
+                yield chunk
+            if data.get("done"):
+                break
 
 
 def _clean_history(history: list[dict] | None) -> list[dict]:

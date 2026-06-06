@@ -163,6 +163,71 @@ export async function askCompanion(
   return companionPost<CompanionReply>("/companion/ask", token, { question, history }, 90000);
 }
 
+// Stream Jerry's reply token-by-token via SSE. Calls onDelta for each chunk and
+// resolves with how it was generated. THROWS if the stream endpoint is missing
+// (older deploy → 404), unauthorized, or yields nothing — so the caller can fall
+// back to the plain askCompanion() request. This keeps the live (non-streaming)
+// backend working untouched: streaming simply upgrades the feel once deployed.
+export async function streamCompanion(
+  token: string,
+  question: string,
+  history: ChatTurn[],
+  onDelta: (text: string) => void,
+): Promise<{ generated_by: string }> {
+  if (DEMO) {
+    const { answer, generated_by } = demoAnswer(question);
+    for (const w of answer.split(/(\s+)/)) {
+      onDelta(w);
+      await delay(null, 18);
+    }
+    return { generated_by };
+  }
+
+  const ctrl = new AbortController();
+  const t = setTimeout(() => ctrl.abort(), 120000);
+  try {
+    const res = await fetch(`${API}/companion/ask/stream`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "x-access-token": token },
+      body: JSON.stringify({ question, history }),
+      signal: ctrl.signal,
+    });
+    if (res.status === 401 || res.status === 403) throw new Error("unauthorized");
+    if (!res.ok || !res.body) throw new Error(`HTTP ${res.status}`);
+
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder();
+    let buf = "";
+    let got = false;
+    let generated_by = "llm";
+    for (;;) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      buf += decoder.decode(value, { stream: true });
+      let nl: number;
+      while ((nl = buf.indexOf("\n\n")) >= 0) {
+        const raw = buf.slice(0, nl).trim();
+        buf = buf.slice(nl + 2);
+        if (!raw.startsWith("data:")) continue;
+        try {
+          const obj = JSON.parse(raw.slice(5).trim());
+          if (typeof obj.delta === "string") {
+            got = true;
+            onDelta(obj.delta);
+          }
+          if (obj.done && obj.generated_by) generated_by = obj.generated_by;
+        } catch {
+          /* ignore a partial/garbled frame */
+        }
+      }
+    }
+    if (!got) throw new Error("empty stream");
+    return { generated_by };
+  } finally {
+    clearTimeout(t);
+  }
+}
+
 export async function correctCompanion(
   token: string,
   text: string,

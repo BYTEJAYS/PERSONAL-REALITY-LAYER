@@ -257,10 +257,17 @@ def compose_friend_answer(question: str, evidence: list[dict],
 
 
 # --- DB adapter -------------------------------------------------------------
-def ask(db, question: str, use_llm: bool = True, history: list[dict] | None = None) -> dict:
+def build_context(db, question: str) -> dict:
+    """All the DB work for an answer (retrieval → redaction → prompt), done ONCE.
+
+    Shared by the blocking `ask()` and the streaming endpoint so they're identical
+    in what Jerry knows and how he's instructed. Touches the DB only here, so the
+    streaming path can hold the model open without keeping a DB session busy.
+    Returns the built system/user prompts, the temperature, and the redacted
+    evidence + mood for the deterministic fallback.
+    """
     from sqlalchemy import select
     from .models import Memory
-    from . import llm
 
     # Retrieve the memories most RELEVANT to the question via the pgvector
     # embeddings, so different questions surface different evidence. (Keyword
@@ -305,33 +312,42 @@ def ask(db, question: str, use_llm: bool = True, history: list[dict] | None = No
     except Exception:
         pass
 
+    persona = ""
+    try:
+        from . import persona as persona_mod
+        persona = persona_mod.system_prompt(db)
+    except Exception:
+        pass
+    system = friend_system_prompt(persona)
+    ev_text = "\n".join(f"- {e['content']}" for e in evidence)
+    factual = _factual_question(question)
+    user = (
+        f"These background notes are the ONLY thing you actually know about {OWNER_NAME}'s "
+        f"life — don't list them back, but don't go beyond them either:\n{ev_text}\n\n"
+        f"Your friend says: \"{question}\"\n\n"
+        f"Reply as {COMPANION_NAME} — naturally and briefly, like a real friend in a chat. "
+        "Answer only what they asked; don't volunteer a rundown of everything you know."
+    )
+    if factual:
+        user += (
+            f"\n\nThis is a real question about {OWNER_NAME}'s life. Answer using ONLY the "
+            "facts in the notes above. If the notes don't contain the answer, say you're not "
+            "sure or that it's his to tell — do NOT invent, guess, or relabel a relationship."
+        )
+    # Cold for real questions (accuracy), loose for banter (so Jerry stays witty).
+    temp = 0.4 if factual else 0.8
+    return {"system": system, "user": user, "temp": temp,
+            "evidence": evidence, "mood": mood, "question": question}
+
+
+def ask(db, question: str, use_llm: bool = True, history: list[dict] | None = None) -> dict:
+    from . import llm
+    ctx = build_context(db, question)
+
     answer, by = None, "deterministic"
     if use_llm and llm.available():
-        persona = ""
-        try:
-            from . import persona as persona_mod
-            persona = persona_mod.system_prompt(db)
-        except Exception:
-            pass
-        system = friend_system_prompt(persona)
-        ev_text = "\n".join(f"- {e['content']}" for e in evidence)
-        factual = _factual_question(question)
-        user = (
-            f"These background notes are the ONLY thing you actually know about {OWNER_NAME}'s "
-            f"life — don't list them back, but don't go beyond them either:\n{ev_text}\n\n"
-            f"Your friend says: \"{question}\"\n\n"
-            f"Reply as {COMPANION_NAME} — naturally and briefly, like a real friend in a chat. "
-            "Answer only what they asked; don't volunteer a rundown of everything you know."
-        )
-        if factual:
-            user += (
-                f"\n\nThis is a real question about {OWNER_NAME}'s life. Answer using ONLY the "
-                "facts in the notes above. If the notes don't contain the answer, say you're not "
-                "sure or that it's his to tell — do NOT invent, guess, or relabel a relationship."
-            )
-        # Cold for real questions (accuracy), loose for banter (so Jerry stays witty).
-        temp = 0.4 if factual else 0.8
-        out = llm.complete(system, user, temperature=temp, max_tokens=220, history=history)
+        out = llm.complete(ctx["system"], ctx["user"], temperature=ctx["temp"],
+                           max_tokens=220, history=history)
         if out:
             answer, by = out, "llm"
         else:
@@ -340,7 +356,7 @@ def ask(db, question: str, use_llm: bool = True, history: list[dict] | None = No
             answer, by = sleepy_message(), "asleep"
     if not answer:
         # No LLM provider configured at all → intentional deterministic voice.
-        answer = compose_friend_answer(question, evidence, mood)
+        answer = compose_friend_answer(question, ctx["evidence"], ctx["mood"])
 
     return {
         "ready": True,
@@ -350,3 +366,35 @@ def ask(db, question: str, use_llm: bool = True, history: list[dict] | None = No
         "generated_by": by,
         "discretion": "applied",   # raw records were redacted before answering
     }
+
+
+def stream_answer(ctx: dict, history: list[dict] | None = None):
+    """Yield ('delta', text) chunks then a final ('done', {...}) for the SSE
+    endpoint. DB-free: it works off a context already built by build_context, so
+    a DB session isn't held open while the (slow) model streams.
+
+    Mirrors ask()'s branching exactly: live model → real token stream; configured
+    but unreachable → a sleepy line; no provider → the deterministic answer."""
+    from . import llm
+
+    if llm.available():
+        streamed = False
+        try:
+            for chunk in llm.stream(ctx["system"], ctx["user"], temperature=ctx["temp"],
+                                    max_tokens=220, history=history):
+                if chunk:
+                    streamed = True
+                    yield ("delta", chunk)
+        except Exception:
+            streamed = False
+        if streamed:
+            yield ("done", {"generated_by": "llm"})
+            return
+        # configured but unreachable → Jerry's asleep
+        yield ("delta", sleepy_message())
+        yield ("done", {"generated_by": "asleep"})
+        return
+
+    # No LLM provider at all → intentional deterministic voice.
+    yield ("delta", compose_friend_answer(ctx["question"], ctx["evidence"], ctx["mood"]))
+    yield ("done", {"generated_by": "deterministic"})
