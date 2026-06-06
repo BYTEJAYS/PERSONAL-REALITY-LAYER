@@ -49,6 +49,59 @@ Builder: Nixpacks (`npm ci → build → start`, port honored via `$PORT`). Env 
 
 Then redeploy so the build picks it up. Pages: `/` (Spline brain) and `/dashboard`.
 
+### 4. Ollama  (root directory: `ollama/`) — the LLM voice
+
+Optional but it's what turns Jerry's deterministic, template-y replies into a
+real narrated voice. Runs as a **private** service (no public domain) that the
+API reaches over Railway's IPv6 private network. See `ollama/Dockerfile` +
+`ollama/entrypoint.sh` (model is pulled on first boot into a volume, not baked).
+
+> ⚠️ **Cost & speed.** This service is always-on with a few GB of RAM, so it
+> burns Railway credits continuously (~$5–15+/mo, more than the API). CPU
+> inference is slow — expect ~15–40s/reply for `llama3.2:3b`. The frontend
+> already allows a 90s companion timeout for this.
+
+**Dashboard steps (do these in order):**
+
+1. **New → GitHub Repo → `BYTEJAYS/PERSONAL-REALITY-LAYER`** (same project as the
+   API). After it's added, open the service → **Settings → Build**:
+   - **Root Directory**: `ollama`
+   - Builder auto-detects `ollama/railway.json` (Dockerfile). Rename the service
+     to `ollama` (Settings → name) — the API will reference it by this name.
+2. **Settings → Networking**: do **NOT** generate a public domain. Leave it
+   private (Railway gives it `ollama.railway.internal` automatically).
+3. **Variables** (Raw Editor):
+   ```
+   OLLAMA_HOST=[::]:11434
+   OLLAMA_MODEL=llama3.2:3b
+   ```
+   (The Dockerfile already sets these defaults; setting them here lets you swap
+   the model later without a code change.)
+4. **Settings → Volumes → Add Volume**, mount path **`/root/.ollama`**. This
+   persists the downloaded model across restarts/redeploys (~2GB). Without it,
+   every deploy re-downloads the model on boot.
+5. **Deploy.** First boot downloads the model — watch the logs for
+   `[entrypoint] ready — serving 'llama3.2:3b'` (a few minutes). The server
+   answers `/` ("Ollama is running") almost immediately; the pull runs after.
+
+**Then flip the API service to use it** (API service → Variables, change just
+these — Raw Editor replaces ALL vars, so keep the rest):
+
+| var | value |
+|-----|-------|
+| `LLM_PROVIDER` | `ollama` |
+| `OLLAMA_URL` | `http://ollama.railway.internal:11434` |
+| `LLM_MODEL` | `llama3.2:3b` |
+
+Redeploy the API. Verify: `POST /companion/ask` (friend token) now returns
+`"generated_by": "llm"` instead of `"deterministic"`. If Ollama is ever
+unreachable the API silently falls back to deterministic answers (by design), so
+this can't take Jerry down.
+
+> **Gotcha — private networking is IPv6-only.** Ollama must bind `[::]` (done in
+> the Dockerfile via `OLLAMA_HOST`). Binding `0.0.0.0` would be IPv4-only and the
+> API's calls to `ollama.railway.internal` (an IPv6 address) would hang/refuse.
+
 ## Seeding the cloud DB — SYNTHETIC data only
 
 > ⚠️ **A public demo must never hold real personal memories.** Do NOT restore
