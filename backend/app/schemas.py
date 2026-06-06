@@ -118,3 +118,12 @@ class TextIngestIn(BaseModel):
     title: str | None = None       # defaults to the first line
     importance: float = 0.6
     emotion: str | None = None
+
+
+class JournalIn(BaseModel):
+    text: str
+    ts: datetime | None = None     # when it happened; defaults to now (UTC)
+    title: str | None = None       # defaults to "Journal · <date> — <first line>"
+    importance: float = 0.6
+    emotion: str | None = None     # override the auto-detected dominant emotion
+    location: dict | None = None

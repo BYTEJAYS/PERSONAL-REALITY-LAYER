@@ -10,8 +10,8 @@ from . import graph
 from .config import get_settings
 from .db import init_db
 from .routers import (
-    brain, chat, cognitive, companion, cortex, ingest, insights, intake, memories,
-    memory, reality, reconstruct,
+    brain, chat, cognitive, companion, cortex, ingest, insights, intake, journal,
+    memories, memory, reality, reconstruct,
 )
 
 logging.basicConfig(level=logging.INFO)
@@ -72,6 +72,7 @@ app.include_router(memory.router)
 app.include_router(reality.router)
 app.include_router(companion.router)
 app.include_router(intake.router)
+app.include_router(journal.router)
 
 
 @app.get("/health", tags=["meta"])
@@ -101,5 +102,7 @@ def root():
                       "/reality/capture", "/companion/ask", "/companion/about",
                       "/companion/contribute", "/companion/pending", "/companion/review",
                       "/intake/prompts", "/intake/answer", "/intake/bio",
+                      "/journal", "/journal/day/{date}", "/journal/reflection",
+                      "/journal/review/month", "/journal/review/year",
                       "/brain/state", "/memories", "/reconstruct/{day}", "/ingest/git"],
     }

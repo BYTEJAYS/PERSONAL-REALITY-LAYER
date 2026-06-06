@@ -18,8 +18,9 @@ from datetime import datetime, timedelta, timezone
 EMOTION_VALENCE = {
     "joy": 1.0, "happy": 0.9, "excitement": 0.9, "excited": 0.9, "love": 0.9,
     "grateful": 0.8, "proud": 0.8, "content": 0.6, "calm": 0.5, "hopeful": 0.6,
+    "motivated": 0.7, "curious": 0.5, "confident": 0.7, "inspired": 0.8,
     "neutral": 0.0, "surprise": 0.1,
-    "tired": -0.3, "bored": -0.3, "confused": -0.3,
+    "tired": -0.3, "bored": -0.3, "confused": -0.3, "overwhelmed": -0.6,
     "stress": -0.7, "stressed": -0.7, "anxious": -0.7, "anxiety": -0.7, "fear": -0.8,
     "sad": -0.8, "sadness": -0.8, "angry": -0.8, "anger": -0.8,
     "frustrated": -0.6, "frustration": -0.6, "lonely": -0.7, "grief": -0.9,

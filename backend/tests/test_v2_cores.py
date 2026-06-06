@@ -53,6 +53,12 @@ from app.reconstructor import (  # noqa: E402
     deterministic_reconstruction, reconstruct_memory, reconstruction_fidelity,
 )
 from app.emotional_cortex import EmotionEvent, analyze as emo_analyze, valence  # noqa: E402
+from app.journal import (  # noqa: E402
+    extract_events, detect_emotion, detect_category, detect_people,
+    dominant_emotion, summarise_entry, JournalEvent,
+)
+from app.reflection_engine import reflect  # noqa: E402
+from app.reviews import ReviewEntry, compose_review  # noqa: E402
 from app.social_cortex import Interaction, analyze as social_analyze  # noqa: E402
 from app.behaviour_cortex import Activity, analyze as beh_analyze  # noqa: E402
 from app.time_machine import TimePoint, bucket, in_period  # noqa: E402
@@ -1175,6 +1181,95 @@ def test_intake_prompts_are_high_signal_and_routed():
     assert "voice-sample" in sources and "biography" in sources
     ps = prompt_set()
     assert ps["count"] == len(PROMPTS) and ps["guidance"]
+
+
+# --- Journal Mode: per-entry event extraction ------------------------------
+_DIARY = (
+    "Today I attended college. Worked on my ML project. Argued with my friend "
+    "Rahul. Started reading about reinforcement learning. Felt stressed because "
+    "of deadlines. Went to the gym. Watched Interstellar."
+)
+
+
+def test_journal_emotion_and_category_detection():
+    assert detect_emotion("Felt stressed because of deadlines") == "stress"
+    assert detect_emotion("I was so happy and proud today") in ("happy", "proud")
+    assert detect_emotion("nothing much happened") is None
+    assert detect_category("Worked on my ML project and fixed a bug") == "Projects"
+    assert detect_category("Went to the gym and ran 5k") == "Fitness"
+    assert detect_category("Started reading about reinforcement learning") == "Study"
+
+
+def test_journal_people_extraction_is_conservative():
+    assert detect_people("Argued with my friend Rahul") == ["Rahul"]
+    assert detect_people("Priya helped me debug the code") == ["Priya"]
+    # No sentence-initial words / weekdays minted as people.
+    assert detect_people("Today I went to college") == []
+    assert detect_people("Monday was rough") == []
+
+
+def test_journal_extract_events_splits_the_day():
+    events = extract_events(_DIARY)
+    cats = {e.category for e in events}
+    # The day spans several life domains.
+    assert {"Study", "Projects", "Fitness", "Entertainment"} & cats
+    # The argument is captured as a Relationship event involving Rahul, angry.
+    rel = [e for e in events if "Rahul" in e.people]
+    assert rel and rel[0].emotion == "angry"
+    # Stress shows up and bubbles to the dominant emotion of the day.
+    assert any(e.emotion == "stress" for e in events)
+    digest = summarise_entry(_DIARY, events)
+    assert digest["event_count"] == len(events)
+    assert "Rahul" in digest["people"]
+    assert digest["emotion"] in {"angry", "stress"}
+
+
+def test_journal_importance_reflects_salience():
+    events = extract_events("Finally finished the big project! Drank some water.")
+    big = next(e for e in events if "finished" in e.description.lower())
+    assert big.importance >= 0.6  # achievement + weighty words lift it
+
+
+# --- Reflection Engine -----------------------------------------------------
+def test_reflection_sections_are_evidence_tied():
+    events = extract_events(_DIARY)
+    r = reflect(events)  # deterministic (no LLM)
+    assert r["ready"] is True
+    assert r["narrative"] is None
+    # A stressful, argumentative day yields challenges + concrete suggestions.
+    assert r["challenges"]
+    assert any("smaller" in s or "workout" in s or "earlier" in s.lower()
+               for s in r["suggestions"])
+
+
+def test_reflection_empty_day_makes_no_claim():
+    assert reflect([])["ready"] is False
+
+
+# --- Review Engine ---------------------------------------------------------
+def test_review_aggregates_month():
+    base = datetime(2026, 6, 1, tzinfo=timezone.utc)
+    entries = [
+        ReviewEntry(date=base, emotion="happy", importance=0.8,
+                    categories=["Projects", "Study"], people=["Rahul"],
+                    skills=["Python"], goals=["become ML engineer"], title="shipped feature"),
+        ReviewEntry(date=base + timedelta(days=1), emotion="stress", importance=0.6,
+                    categories=["Work"], people=["Rahul"], title="deadline crunch"),
+        ReviewEntry(date=base + timedelta(days=2), emotion="proud", importance=0.9,
+                    categories=["Projects"], skills=["FastAPI"], title="solved hard bug"),
+    ]
+    rev = compose_review(entries, "2026-06", "month")
+    assert rev["ready"] and rev["entry_count"] == 3
+    assert rev["where_life_went"][0]["category"] == "Projects"  # most frequent
+    assert any(p["name"] == "Rahul" and p["mentions"] == 2 for p in rev["people"])
+    assert "Python" in rev["skills_touched"] and "FastAPI" in rev["skills_touched"]
+    assert 0.0 <= rev["growth_score"] <= 1.0
+    # Highest-importance entry leads the standouts.
+    assert rev["standout_memories"][0]["title"] == "solved hard bug"
+
+
+def test_review_empty_period_makes_no_claim():
+    assert compose_review([], "2026-01", "month")["ready"] is False
 
 
 if __name__ == "__main__":
