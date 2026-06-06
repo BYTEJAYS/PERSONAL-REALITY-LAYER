@@ -84,11 +84,15 @@ def compose_review(entries: list[ReviewEntry], period_label: str, scope: str) ->
                               for e in standouts],
         "growth_score": _growth_score(entries, avg_valence, len(skills), len(goals)),
     }
-    top_cat = category_mix.most_common(1)[0][0] if category_mix else "life"
-    review["headline"] = (
-        f"{period_label}: {len(entries)} entries, mood {mood}, "
-        f"mostly {top_cat.lower()}."
-    )
+    n = len(entries)
+    ent_word = "entry" if n == 1 else "entries"
+    ranked = category_mix.most_common()
+    # Only claim a focus when one category clearly leads; otherwise it was a mix.
+    if ranked and (len(ranked) == 1 or ranked[0][1] > ranked[1][1]):
+        focus = f"mostly {ranked[0][0].lower()}"
+    else:
+        focus = "a varied mix"
+    review["headline"] = f"{period_label}: {n} {ent_word}, mood {mood}, {focus}."
     return review
 
 

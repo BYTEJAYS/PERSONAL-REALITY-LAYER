@@ -3,24 +3,36 @@
 import { useCallback, useEffect, useState } from "react";
 import {
   addJournal,
-  fetchTimeline,
+  deleteJournalEntry,
+  fetchDay,
+  fetchMonthReview,
   fetchReflection,
+  fetchTimeline,
+  fetchYearReview,
   JournalDay,
+  JournalFullEntry,
   ReflectionResp,
+  ReviewResp2,
 } from "@/lib/api";
 
 const OWNER_KEY = "prl_owner_token";
 
+function todayISO(): string {
+  return new Date().toISOString().slice(0, 10);
+}
 function prettyDay(iso: string): string {
-  const today = new Date().toISOString().slice(0, 10);
-  if (iso === today) return "Today";
+  if (iso === todayISO()) return "Today";
   const d = new Date(iso + "T00:00:00");
   return d.toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" });
+}
+function thisMonthISO(): string {
+  return todayISO().slice(0, 7);
 }
 
 export default function JournalPage() {
   const [token, setToken] = useState("");
   const [tokenInput, setTokenInput] = useState("");
+  const [tab, setTab] = useState<"journal" | "reviews">("journal");
 
   const [days, setDays] = useState<JournalDay[]>([]);
   const [loading, setLoading] = useState(false);
@@ -31,14 +43,25 @@ export default function JournalPage() {
   const [emotion, setEmotion] = useState("");
   const [saving, setSaving] = useState(false);
 
-  // reflection
+  // reflection (any day)
+  const [reflectDate, setReflectDate] = useState(todayISO());
   const [reflection, setReflection] = useState<ReflectionResp | null>(null);
   const [reflecting, setReflecting] = useState(false);
+
+  // expandable entries → full content + events, lazy-loaded by day
+  const [expanded, setExpanded] = useState<Set<string>>(new Set());
+  const [dayCache, setDayCache] = useState<Record<string, JournalFullEntry[]>>({});
 
   useEffect(() => {
     const fromUrl = new URLSearchParams(window.location.search).get("code");
     if (fromUrl) localStorage.setItem(OWNER_KEY, fromUrl);
     setToken(fromUrl || localStorage.getItem(OWNER_KEY) || "");
+  }, []);
+
+  const onAuthError = useCallback((msg: string) => {
+    setStatus(msg);
+    localStorage.removeItem(OWNER_KEY);
+    setToken("");
   }, []);
 
   const load = useCallback(async (tok: string) => {
@@ -50,20 +73,20 @@ export default function JournalPage() {
       setDays(t.days || []);
     } catch (e) {
       if (e instanceof Error && e.message === "unauthorized") {
-        setStatus("That isn't the owner token. Paste your OWNER_TOKEN.");
-        localStorage.removeItem(OWNER_KEY);
-        setToken("");
+        onAuthError("That isn't the owner token. Paste your OWNER_TOKEN.");
       } else {
         setStatus("Couldn't reach the API — try again.");
       }
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [onAuthError]);
 
   useEffect(() => {
     if (token) load(token);
   }, [token, load]);
+
+  const totalEntries = days.reduce((n, d) => n + d.entries.length, 0);
 
   async function save() {
     if (!text.trim()) return;
@@ -75,6 +98,7 @@ export default function JournalPage() {
         setText("");
         setEmotion("");
         setStatus("Saved.");
+        setDayCache({}); // entries changed → drop cached day views
         await load(token);
       } else {
         setStatus(res.message || "Nothing to save.");
@@ -95,13 +119,58 @@ export default function JournalPage() {
     setReflection(null);
     setStatus("");
     try {
-      const r = await fetchReflection(token); // today
+      const r = await fetchReflection(token, reflectDate);
       setReflection(r);
-      if (!r.ready) setStatus(r.message || "Nothing to reflect on today.");
+      if (!r.ready) setStatus(r.message || "Nothing to reflect on that day.");
     } catch {
       setStatus("Reflection failed — Jerry may be asleep. Try again.");
     } finally {
       setReflecting(false);
+    }
+  }
+
+  async function remove(id: string, date: string) {
+    if (!confirm("Delete this entry? This can't be undone.")) return;
+    setStatus("");
+    try {
+      const r = await deleteJournalEntry(token, id);
+      if (r.ok) {
+        setDayCache((c) => {
+          const n = { ...c };
+          delete n[date];
+          return n;
+        });
+        setExpanded((s) => {
+          const n = new Set(s);
+          n.delete(id);
+          return n;
+        });
+        await load(token);
+      } else {
+        setStatus(r.message || "Couldn't delete.");
+      }
+    } catch (e) {
+      setStatus(
+        e instanceof Error && e.message === "unauthorized"
+          ? "Token rejected — re-enter your owner token."
+          : "Couldn't delete — try again.",
+      );
+    }
+  }
+
+  async function toggle(id: string, date: string) {
+    setExpanded((s) => {
+      const n = new Set(s);
+      n.has(id) ? n.delete(id) : n.add(id);
+      return n;
+    });
+    if (!dayCache[date]) {
+      try {
+        const d = await fetchDay(token, date);
+        setDayCache((c) => ({ ...c, [date]: d.entries || [] }));
+      } catch {
+        /* leave uncached; the summary still shows */
+      }
     }
   }
 
@@ -149,121 +218,371 @@ export default function JournalPage() {
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-xl font-semibold">Journal</h1>
-            <p className="text-xs text-zinc-500">Private to you — Jerry never quotes it to friends</p>
+            <p className="text-xs text-zinc-500">
+              {totalEntries} {totalEntries === 1 ? "entry" : "entries"} · private to you — Jerry never quotes it to friends
+            </p>
           </div>
           <button
-            onClick={() => load(token)}
+            onClick={() => { setDayCache({}); load(token); }}
             className="rounded-full bg-white/5 px-3 py-1 text-xs text-zinc-300 hover:bg-white/10"
           >
             {loading ? "refreshing…" : "refresh"}
           </button>
         </div>
 
-        {/* Compose */}
-        <section className="mt-6 rounded-2xl border border-white/10 bg-white/5 p-4">
-          <textarea
-            className="w-full resize-y rounded-lg border border-white/10 bg-black/40 px-3 py-2 text-sm outline-none focus:border-indigo-400"
-            rows={4}
-            placeholder="How did today go? What happened, who you saw, how you felt…"
-            value={text}
-            onChange={(e) => setText(e.target.value)}
-          />
-          <div className="mt-3 flex items-center gap-2">
-            <input
-              className="w-40 rounded-lg border border-white/10 bg-black/40 px-3 py-2 text-sm outline-none focus:border-indigo-400"
-              placeholder="mood (optional)"
-              value={emotion}
-              onChange={(e) => setEmotion(e.target.value)}
-            />
+        {/* Tabs */}
+        <div className="mt-5 flex gap-1 rounded-full border border-white/10 bg-white/5 p-1 text-sm">
+          {(["journal", "reviews"] as const).map((t) => (
             <button
-              onClick={save}
-              disabled={saving || !text.trim()}
-              className="ml-auto rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium hover:bg-indigo-500 disabled:opacity-40"
+              key={t}
+              onClick={() => setTab(t)}
+              className={`flex-1 rounded-full px-4 py-1.5 capitalize transition ${
+                tab === t ? "bg-indigo-600 text-white" : "text-zinc-400 hover:text-zinc-200"
+              }`}
             >
-              {saving ? "saving…" : "Save entry"}
+              {t}
             </button>
-          </div>
-        </section>
+          ))}
+        </div>
 
         {status && <p className="mt-3 text-xs text-amber-400">{status}</p>}
 
-        {/* Reflect on today */}
-        <section className="mt-6">
-          <div className="flex items-center justify-between">
-            <h2 className="text-sm font-medium text-zinc-300">Reflection</h2>
-            <button
-              onClick={reflect}
-              disabled={reflecting}
-              className="rounded-full bg-indigo-600/80 px-3 py-1 text-xs font-medium hover:bg-indigo-500 disabled:opacity-40"
-            >
-              {reflecting ? "reflecting…" : "Reflect on today"}
-            </button>
-          </div>
-          {reflection?.ready && (
-            <div className="mt-3 space-y-3 rounded-2xl border border-white/10 bg-white/5 p-4">
-              {reflection.narrative && (
-                <p className="text-sm leading-relaxed text-zinc-200">{reflection.narrative}</p>
-              )}
-              <ReflectList label="Wins" items={reflection.wins} tone="text-emerald-300" />
-              <ReflectList label="Challenges" items={reflection.challenges} tone="text-amber-300" />
-              <ReflectList label="Lessons" items={reflection.lessons} tone="text-sky-300" />
-              <ReflectList label="Gratitude" items={reflection.gratitude} tone="text-rose-300" />
-              <ReflectList label="Suggestions" items={reflection.suggestions} tone="text-violet-300" />
-            </div>
-          )}
-        </section>
+        {tab === "journal" ? (
+          <>
+            {/* Compose */}
+            <section className="mt-6 rounded-2xl border border-white/10 bg-white/5 p-4">
+              <textarea
+                className="w-full resize-y rounded-lg border border-white/10 bg-black/40 px-3 py-2 text-sm outline-none focus:border-indigo-400"
+                rows={4}
+                placeholder="How did today go? What happened, who you saw, how you felt…"
+                value={text}
+                onChange={(e) => setText(e.target.value)}
+              />
+              <div className="mt-3 flex items-center gap-2">
+                <input
+                  className="w-40 rounded-lg border border-white/10 bg-black/40 px-3 py-2 text-sm outline-none focus:border-indigo-400"
+                  placeholder="mood (optional)"
+                  value={emotion}
+                  onChange={(e) => setEmotion(e.target.value)}
+                />
+                <button
+                  onClick={save}
+                  disabled={saving || !text.trim()}
+                  className="ml-auto rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium hover:bg-indigo-500 disabled:opacity-40"
+                >
+                  {saving ? "saving…" : "Save entry"}
+                </button>
+              </div>
+            </section>
 
-        {/* Timeline */}
-        <section className="mt-8">
-          <h2 className="text-sm font-medium text-zinc-300">
-            Timeline <span className="text-zinc-500">({days.reduce((n, d) => n + d.entries.length, 0)})</span>
-          </h2>
-          {days.length === 0 ? (
-            <p className="mt-2 text-sm text-zinc-500">
-              No entries yet — write your first one above. ✍️
-            </p>
-          ) : (
-            <div className="mt-3 space-y-5">
-              {days.map((day) => (
-                <div key={day.date}>
-                  <p className="text-xs font-medium uppercase tracking-wide text-zinc-500">
-                    {prettyDay(day.date)}
-                  </p>
-                  <ul className="mt-2 space-y-2">
-                    {day.entries.map((e) => (
-                      <li key={e.id} className="rounded-xl border border-white/10 bg-white/5 p-3">
-                        <div className="flex items-start justify-between gap-3">
-                          <p className="text-sm text-zinc-100">{e.title}</p>
-                          {e.emotion && (
-                            <span className="shrink-0 rounded-full bg-indigo-500/15 px-2 py-0.5 text-[11px] text-indigo-300">
-                              {e.emotion}
-                            </span>
-                          )}
-                        </div>
-                        {(e.categories.length > 0 || e.people.length > 0) && (
-                          <div className="mt-1.5 flex flex-wrap gap-1.5">
-                            {e.people.map((p) => (
-                              <span key={"p" + p} className="rounded-full bg-white/5 px-2 py-0.5 text-[11px] text-zinc-400">
-                                @{p}
-                              </span>
-                            ))}
-                            {e.categories.map((c) => (
-                              <span key={"c" + c} className="rounded-full bg-white/5 px-2 py-0.5 text-[11px] text-zinc-500">
-                                {c}
-                              </span>
-                            ))}
-                          </div>
-                        )}
-                      </li>
-                    ))}
-                  </ul>
+            {/* Reflection (any day) */}
+            <section className="mt-6">
+              <div className="flex items-center justify-between gap-2">
+                <h2 className="text-sm font-medium text-zinc-300">Reflection</h2>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="date"
+                    max={todayISO()}
+                    value={reflectDate}
+                    onChange={(e) => setReflectDate(e.target.value)}
+                    className="rounded-lg border border-white/10 bg-black/40 px-2 py-1 text-xs text-zinc-300 outline-none focus:border-indigo-400"
+                  />
+                  <button
+                    onClick={reflect}
+                    disabled={reflecting}
+                    className="rounded-full bg-indigo-600/80 px-3 py-1 text-xs font-medium hover:bg-indigo-500 disabled:opacity-40"
+                  >
+                    {reflecting ? "reflecting…" : "Reflect"}
+                  </button>
                 </div>
-              ))}
-            </div>
-          )}
-        </section>
+              </div>
+              {reflection?.ready && (
+                <div className="mt-3 space-y-3 rounded-2xl border border-white/10 bg-white/5 p-4">
+                  {reflection.narrative && (
+                    <p className="text-sm leading-relaxed text-zinc-200">{reflection.narrative}</p>
+                  )}
+                  <ReflectList label="Wins" items={reflection.wins} tone="text-emerald-300" />
+                  <ReflectList label="Challenges" items={reflection.challenges} tone="text-amber-300" />
+                  <ReflectList label="Lessons" items={reflection.lessons} tone="text-sky-300" />
+                  <ReflectList label="Gratitude" items={reflection.gratitude} tone="text-rose-300" />
+                  <ReflectList label="Suggestions" items={reflection.suggestions} tone="text-violet-300" />
+                </div>
+              )}
+            </section>
+
+            {/* Timeline */}
+            <section className="mt-8">
+              <h2 className="text-sm font-medium text-zinc-300">
+                Timeline <span className="text-zinc-500">({totalEntries})</span>
+              </h2>
+              {days.length === 0 ? (
+                <p className="mt-2 text-sm text-zinc-500">
+                  No entries yet — write your first one above. ✍️
+                </p>
+              ) : (
+                <div className="mt-3 space-y-5">
+                  {days.map((day) => (
+                    <div key={day.date}>
+                      <p className="text-xs font-medium uppercase tracking-wide text-zinc-500">
+                        {prettyDay(day.date)}
+                      </p>
+                      <ul className="mt-2 space-y-2">
+                        {day.entries.map((e) => {
+                          const open = expanded.has(e.id);
+                          const full = dayCache[day.date]?.find((x) => x.id === e.id);
+                          return (
+                            <li key={e.id} className="rounded-xl border border-white/10 bg-white/5 p-3">
+                              <div className="flex items-start justify-between gap-3">
+                                <button
+                                  onClick={() => toggle(e.id, day.date)}
+                                  className="flex-1 text-left"
+                                >
+                                  <span className="text-sm text-zinc-100">
+                                    <span className="mr-1 text-zinc-500">{open ? "▾" : "▸"}</span>
+                                    {e.title}
+                                  </span>
+                                </button>
+                                <div className="flex shrink-0 items-center gap-2">
+                                  {e.emotion && (
+                                    <span className="rounded-full bg-indigo-500/15 px-2 py-0.5 text-[11px] text-indigo-300">
+                                      {e.emotion}
+                                    </span>
+                                  )}
+                                  <button
+                                    onClick={() => remove(e.id, day.date)}
+                                    title="Delete entry"
+                                    className="rounded-md px-1.5 py-0.5 text-zinc-500 hover:bg-rose-500/15 hover:text-rose-300"
+                                  >
+                                    🗑
+                                  </button>
+                                </div>
+                              </div>
+
+                              {(e.categories.length > 0 || e.people.length > 0) && (
+                                <div className="mt-1.5 flex flex-wrap gap-1.5">
+                                  {e.people.map((p) => (
+                                    <span key={"p" + p} className="rounded-full bg-white/5 px-2 py-0.5 text-[11px] text-zinc-400">
+                                      @{p}
+                                    </span>
+                                  ))}
+                                  {e.categories.map((c) => (
+                                    <span key={"c" + c} className="rounded-full bg-white/5 px-2 py-0.5 text-[11px] text-zinc-500">
+                                      {c}
+                                    </span>
+                                  ))}
+                                </div>
+                              )}
+
+                              {open && (
+                                <div className="mt-3 border-t border-white/10 pt-3">
+                                  {full ? (
+                                    <>
+                                      <p className="whitespace-pre-wrap text-sm leading-relaxed text-zinc-300">
+                                        {full.content}
+                                      </p>
+                                      {(full.journal.events?.length ?? 0) > 0 && (
+                                        <ul className="mt-3 space-y-1.5">
+                                          {full.journal.events!.map((ev, i) => (
+                                            <li key={i} className="flex items-start gap-2 text-xs text-zinc-400">
+                                              <span className="rounded bg-white/5 px-1.5 py-0.5 text-[10px] text-zinc-500">
+                                                {ev.category}
+                                              </span>
+                                              <span className="flex-1">{ev.description}</span>
+                                              {ev.emotion && (
+                                                <span className="text-indigo-300/80">{ev.emotion}</span>
+                                              )}
+                                            </li>
+                                          ))}
+                                        </ul>
+                                      )}
+                                    </>
+                                  ) : (
+                                    <p className="text-xs text-zinc-500">loading…</p>
+                                  )}
+                                </div>
+                              )}
+                            </li>
+                          );
+                        })}
+                      </ul>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </section>
+          </>
+        ) : (
+          <ReviewsTab token={token} />
+        )}
       </div>
     </main>
+  );
+}
+
+function ReviewsTab({ token }: { token: string }) {
+  const [ym, setYm] = useState(thisMonthISO());
+  const [year, setYear] = useState(new Date().getFullYear());
+  const [scope, setScope] = useState<"month" | "year">("month");
+  const [data, setData] = useState<ReviewResp2 | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [err, setErr] = useState("");
+
+  const run = useCallback(async () => {
+    setLoading(true);
+    setErr("");
+    setData(null);
+    try {
+      const r = scope === "month"
+        ? await fetchMonthReview(token, ym)
+        : await fetchYearReview(token, year);
+      setData(r);
+    } catch {
+      setErr("Couldn't load review — try again.");
+    } finally {
+      setLoading(false);
+    }
+  }, [token, scope, ym, year]);
+
+  useEffect(() => { run(); }, [run]);
+
+  return (
+    <section className="mt-6">
+      <div className="flex flex-wrap items-center gap-2">
+        <div className="flex gap-1 rounded-full border border-white/10 bg-white/5 p-1 text-xs">
+          {(["month", "year"] as const).map((s) => (
+            <button
+              key={s}
+              onClick={() => setScope(s)}
+              className={`rounded-full px-3 py-1 capitalize ${
+                scope === s ? "bg-indigo-600 text-white" : "text-zinc-400 hover:text-zinc-200"
+              }`}
+            >
+              {s}
+            </button>
+          ))}
+        </div>
+        {scope === "month" ? (
+          <input
+            type="month"
+            max={thisMonthISO()}
+            value={ym}
+            onChange={(e) => setYm(e.target.value)}
+            className="rounded-lg border border-white/10 bg-black/40 px-2 py-1 text-xs text-zinc-300 outline-none focus:border-indigo-400"
+          />
+        ) : (
+          <input
+            type="number"
+            min={2000}
+            max={new Date().getFullYear()}
+            value={year}
+            onChange={(e) => setYear(Number(e.target.value))}
+            className="w-24 rounded-lg border border-white/10 bg-black/40 px-2 py-1 text-xs text-zinc-300 outline-none focus:border-indigo-400"
+          />
+        )}
+        {loading && <span className="text-xs text-zinc-500">loading…</span>}
+      </div>
+
+      {err && <p className="mt-3 text-xs text-amber-400">{err}</p>}
+
+      {data && !data.ready && (
+        <p className="mt-4 text-sm text-zinc-500">{data.message || "No entries for this period."}</p>
+      )}
+
+      {data?.ready && (
+        <div className="mt-4 space-y-4">
+          <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
+            <p className="text-sm text-zinc-200">{data.headline}</p>
+            <div className="mt-3 flex flex-wrap gap-4 text-xs text-zinc-400">
+              <Stat label="Entries" value={String(data.entry_count ?? 0)} />
+              <Stat label="Mood" value={data.mood ?? "—"} />
+              <Stat label="Growth" value={data.growth_score != null ? `${Math.round(data.growth_score * 100)}%` : "—"} />
+            </div>
+          </div>
+
+          <BarCard title="Where life went" rows={(data.where_life_went || []).map((r) => ({ label: r.category, n: r.count }))} />
+          <BarCard title="Emotions" rows={(data.emotion_mix || []).map((r) => ({ label: r.emotion, n: r.count }))} tone="bg-rose-500/40" />
+
+          {(data.people?.length ?? 0) > 0 && (
+            <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
+              <p className="text-xs font-semibold text-zinc-300">People</p>
+              <div className="mt-2 flex flex-wrap gap-1.5">
+                {data.people!.map((p) => (
+                  <span key={p.name} className="rounded-full bg-white/5 px-2 py-0.5 text-[11px] text-zinc-400">
+                    @{p.name} · {p.mentions}
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {(data.chapters?.length ?? 0) > 0 && (
+            <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
+              <p className="text-xs font-semibold text-zinc-300">Chapters</p>
+              <ul className="mt-2 space-y-1.5">
+                {data.chapters!.map((c, i) => (
+                  <li key={i} className="text-sm text-zinc-300">
+                    <span className="text-indigo-300">{c.title}</span>
+                    <span className="text-zinc-500"> · {c.start}{c.span_months > 1 ? `–${c.end}` : ""}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+
+          {(data.standout_memories?.length ?? 0) > 0 && (
+            <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
+              <p className="text-xs font-semibold text-zinc-300">Standout moments</p>
+              <ul className="mt-2 space-y-1.5">
+                {data.standout_memories!.map((m, i) => (
+                  <li key={i} className="flex items-center justify-between gap-3 text-sm text-zinc-300">
+                    <span className="truncate">{m.title}</span>
+                    <span className="shrink-0 text-xs text-zinc-500">{m.date}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+        </div>
+      )}
+    </section>
+  );
+}
+
+function Stat({ label, value }: { label: string; value: string }) {
+  return (
+    <div>
+      <span className="text-zinc-500">{label}: </span>
+      <span className="font-medium capitalize text-zinc-200">{value}</span>
+    </div>
+  );
+}
+
+function BarCard({
+  title,
+  rows,
+  tone = "bg-indigo-500/50",
+}: {
+  title: string;
+  rows: { label: string; n: number }[];
+  tone?: string;
+}) {
+  if (rows.length === 0) return null;
+  const max = Math.max(...rows.map((r) => r.n), 1);
+  return (
+    <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
+      <p className="text-xs font-semibold text-zinc-300">{title}</p>
+      <div className="mt-2 space-y-1.5">
+        {rows.map((r) => (
+          <div key={r.label} className="flex items-center gap-2">
+            <span className="w-28 shrink-0 truncate text-xs capitalize text-zinc-400">{r.label}</span>
+            <div className="h-2 flex-1 overflow-hidden rounded-full bg-white/5">
+              <div className={`h-full rounded-full ${tone}`} style={{ width: `${(r.n / max) * 100}%` }} />
+            </div>
+            <span className="w-6 shrink-0 text-right text-xs text-zinc-500">{r.n}</span>
+          </div>
+        ))}
+      </div>
+    </div>
   );
 }
 

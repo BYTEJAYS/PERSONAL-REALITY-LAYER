@@ -353,6 +353,88 @@ export async function fetchReflection(token: string, date?: string): Promise<Ref
   return companionGet<ReflectionResp>(`/journal/reflection${q}`, token, 90000);
 }
 
+// Delete one journal entry by id.
+export async function deleteJournalEntry(
+  token: string,
+  id: string,
+): Promise<{ ok: boolean; message?: string }> {
+  const res = await fetch(`${API}/journal/${id}`, {
+    method: "DELETE",
+    headers: { "x-access-token": token },
+  });
+  if (res.status === 401 || res.status === 403) throw new Error("unauthorized");
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  return res.json();
+}
+
+// One day's full entries with their extracted events.
+export interface JournalEvent {
+  category: string;
+  description: string;
+  emotion?: string | null;
+  people: string[];
+  importance: number;
+}
+export interface JournalFullEntry {
+  id: string;
+  title: string;
+  content: string;
+  emotion?: string | null;
+  importance?: number;
+  journal: {
+    events?: JournalEvent[];
+    categories?: string[];
+    people?: string[];
+    emotion?: string | null;
+    event_count?: number;
+  };
+}
+export interface DayResp {
+  ready: boolean;
+  date: string;
+  entries: JournalFullEntry[];
+  message?: string;
+}
+export async function fetchDay(token: string, date: string): Promise<DayResp> {
+  return companionGet<DayResp>(`/journal/day/${date}`, token);
+}
+
+// Monthly / yearly reviews.
+export interface ReviewChapter {
+  title: string;
+  theme: string;
+  start: string;
+  end: string;
+  span_months: number;
+  months: string[];
+}
+export interface ReviewResp2 {
+  ready: boolean;
+  scope: string;
+  period: string;
+  message?: string;
+  entry_count?: number;
+  mood?: string;
+  avg_valence?: number;
+  emotion_mix?: { emotion: string; count: number }[];
+  where_life_went?: { category: string; count: number }[];
+  people?: { name: string; mentions: number }[];
+  skills_touched?: string[];
+  goals_stated?: string[];
+  standout_memories?: { date: string; title: string; emotion?: string | null; importance: number }[];
+  growth_score?: number;
+  headline?: string;
+  chapters?: ReviewChapter[];
+}
+export async function fetchMonthReview(token: string, ym?: string): Promise<ReviewResp2> {
+  const q = ym ? `?month=${encodeURIComponent(ym)}` : "";
+  return companionGet<ReviewResp2>(`/journal/review/month${q}`, token);
+}
+export async function fetchYearReview(token: string, year?: number): Promise<ReviewResp2> {
+  const q = year ? `?year=${year}` : "";
+  return companionGet<ReviewResp2>(`/journal/review/year${q}`, token);
+}
+
 export interface ReviewResp {
   id: string;
   decision: string;
