@@ -37,10 +37,10 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Friends-deployment guard: when OWNER_TOKEN is set, only the owner may reach the
-# raw endpoints. Friends (friend tokens) are limited to the discreet /companion
+# Owner guard: when OWNER_TOKEN is set, only the owner (with that one code) may
+# reach the raw endpoints. Everyone else is limited to the public /companion
 # voice, which applies record redaction. With no OWNER_TOKEN, the gate is open
-# (local/dev). This is what makes "friends can talk to me" safe to host with real
+# (local/dev). This is what makes "anyone can talk to me" safe to host with real
 # data — they never reach exact finances/health/memories.
 _OWNER_OPEN_PATHS = ("/health", "/", "/docs", "/openapi.json", "/redoc")
 

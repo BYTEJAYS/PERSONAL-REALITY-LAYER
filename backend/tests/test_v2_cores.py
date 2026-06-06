@@ -83,7 +83,7 @@ from app.companion import (  # noqa: E402
     mask_numbers, qualitative_money, redact_evidence, disclosure_policy,
     compose_friend_answer,
 )
-from app.auth import parse_tokens, classify_token  # noqa: E402
+from app.auth import classify_token  # noqa: E402
 from app.feedback import classify_submission, assess_submission  # noqa: E402
 from app.intake import PROMPTS, prompt_set  # noqa: E402
 
@@ -1141,14 +1141,13 @@ def test_companion_policy_and_fallback_are_safe():
     assert "Jay" in ans and "content" in ans
 
 
-# --- Companion mode: token auth --------------------------------------------
+# --- Companion mode: owner-only auth ---------------------------------------
 def test_auth_token_roles():
-    friends = parse_tokens("alice123, bob456 ,")
-    assert friends == {"alice123", "bob456"}
-    assert classify_token("owner-secret", "owner-secret", friends) == "owner"
-    assert classify_token("alice123", "owner-secret", friends) == "friend"
-    assert classify_token("stranger", "owner-secret", friends) is None
-    assert classify_token(None, "owner-secret", friends) is None
+    # Only the owner code is recognised; everyone else is a guest (None here).
+    assert classify_token("owner-secret", "owner-secret") == "owner"
+    assert classify_token("stranger", "owner-secret") is None
+    assert classify_token(None, "owner-secret") is None
+    assert classify_token("anything", None) is None
 
 
 # --- Friend feedback loop: quarantine before truth -------------------------

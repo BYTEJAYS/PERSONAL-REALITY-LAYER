@@ -22,7 +22,7 @@ const STARTERS = [
 ];
 
 const UNAUTH =
-  "This companion is private — open the link Jay sent you (it carries your access code).";
+  "That part’s just for Jay — but you can still ask me anything about him.";
 const OFFLINE = "Couldn’t reach the companion just now — try again in a moment.";
 
 // Map how a reply was generated → the little status the dot shows.
@@ -65,9 +65,10 @@ export default function Page() {
   const [status, setStatus] = useState<Status>("idle");
   const endRef = useRef<HTMLDivElement>(null);
 
-  // No access gate — friends just open the link and start talking. If a deploy
-  // is token-locked (FRIEND_TOKENS set), the code rides in the link (?code=…)
-  // or was saved from a previous visit, so there's still nothing to type.
+  // No access gate — anyone just opens the page and starts talking. Only the
+  // OWNER code unlocks owner-only features (review/correct approval); it rides
+  // in the link (?code=…) or was saved from a previous visit, so there's still
+  // nothing for a normal visitor to type.
   useEffect(() => {
     const fromUrl = new URLSearchParams(window.location.search).get("code");
     if (fromUrl) localStorage.setItem(TOKEN_KEY, fromUrl);
