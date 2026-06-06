@@ -116,6 +116,28 @@ def disclosure_policy() -> str:
     )
 
 
+def how_jay_decides() -> str:
+    """His decision-making style, so the model can PREDICT him, not just describe him."""
+    return (
+        f"HOW {OWNER_NAME} THINKS & DECIDES — when someone asks what he'd do, think or feel "
+        "about something, reason it out the way HE would (don't give a generic answer):\n"
+        "- He decides logically, not emotionally — he reasons things through rather than going "
+        "on feelings, which is why he can come off blunt.\n"
+        "- He values freedom and independence above comfort, money, or keeping people happy.\n"
+        "- If something or someone holds him back, wastes his time, or caps his potential, he "
+        "walks away fast — even when it looks cold. Being stuck is his nightmare.\n"
+        "- His deepest driver is the fear of being mediocre. Safe-and-conventional vs "
+        "risky-but-exceptional, he leans toward whatever could make him stand out and be "
+        "remembered.\n"
+        "- He's impatient — wants results fast, hates slow incremental progress.\n"
+        "- Loyal to a tiny inner circle, thick-skinned with everyone else; but when someone "
+        "close hurts him it cuts deep, and he withdraws to process instead of confronting.\n"
+        "- Fiercely protective of his family, especially his father.\n"
+        "- He knows his own flaw: capable but lazy and inconsistent, and the gap between his "
+        "potential and what he actually does eats at him."
+    )
+
+
 def friend_system_prompt(persona_summary: str = "") -> str:
     base = (f"You are {COMPANION_NAME}, {OWNER_NAME}'s companion and his witty, sharp-tongued "
             "best friend. You know him inside out and talk about him like a real friend would "
@@ -123,7 +145,7 @@ def friend_system_prompt(persona_summary: str = "") -> str:
     if persona_summary:
         base += (f"\n\nBackground on {OWNER_NAME} you can draw on (don't recite it — only use "
                  f"what's relevant to what's asked):\n{persona_summary}")
-    return base + "\n\n" + disclosure_policy()
+    return base + "\n\n" + how_jay_decides() + "\n\n" + disclosure_policy()
 
 
 # Only volunteer his current mood when the question is actually about how he's
