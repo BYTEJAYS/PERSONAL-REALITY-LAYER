@@ -553,6 +553,25 @@ export async function fetchTruths(token: string): Promise<TruthsResp> {
   return companionGet<TruthsResp>("/cognitive/truths", token, 40000);
 }
 
+// Council of Minds — ten reasoning lenses deliberate on a question.
+export interface CouncilTake {
+  mind: string;
+  lens: string;
+  take: string;
+  draws_on: string[];
+}
+export interface CouncilResp {
+  ready: boolean;
+  question: string;
+  panel: string[];
+  takes: CouncilTake[];
+  synthesis: string;
+  generated_by: string;
+}
+export async function askCouncil(token: string, question: string): Promise<CouncilResp> {
+  return companionPost<CouncilResp>("/cognitive/council", token, { question }, 90000);
+}
+
 export async function fetchMonthReview(token: string, ym?: string): Promise<ReviewResp2> {
   const q = ym ? `?month=${encodeURIComponent(ym)}` : "";
   return companionGet<ReviewResp2>(`/journal/review/month${q}`, token);

@@ -3,6 +3,8 @@
 import { useCallback, useEffect, useState } from "react";
 import {
   addJournal,
+  askCouncil,
+  CouncilResp,
   deleteJournalEntry,
   fetchDay,
   fetchMonthReview,
@@ -43,7 +45,7 @@ function thisMonthISO(): string {
 export default function JournalPage() {
   const [token, setToken] = useState("");
   const [tokenInput, setTokenInput] = useState("");
-  const [tab, setTab] = useState<"journal" | "reviews" | "wisdom" | "principles">("journal");
+  const [tab, setTab] = useState<"journal" | "reviews" | "wisdom" | "principles" | "council">("journal");
 
   const [days, setDays] = useState<JournalDay[]>([]);
   const [loading, setLoading] = useState(false);
@@ -243,7 +245,7 @@ export default function JournalPage() {
 
         {/* Tabs */}
         <div className="mt-5 flex gap-1 rounded-full border border-white/10 bg-white/5 p-1 text-sm">
-          {(["journal", "reviews", "wisdom", "principles"] as const).map((t) => (
+          {(["journal", "reviews", "wisdom", "principles", "council"] as const).map((t) => (
             <button
               key={t}
               onClick={() => setTab(t)}
@@ -426,8 +428,10 @@ export default function JournalPage() {
           <ReviewsTab token={token} />
         ) : tab === "wisdom" ? (
           <WisdomTab token={token} />
-        ) : (
+        ) : tab === "principles" ? (
           <PrinciplesTab token={token} />
+        ) : (
+          <CouncilTab token={token} />
         )}
       </div>
     </main>
@@ -504,6 +508,118 @@ function WisdomTab({ token }: { token: string }) {
           </div>
         );
       })}
+    </section>
+  );
+}
+
+const MIND_ICON: Record<string, string> = {
+  Scientist: "🔬", Critic: "⚠️", Optimist: "🌅", Strategist: "♟️",
+  Philosopher: "🧭", Psychologist: "🫀", Historian: "📜", Entrepreneur: "🚀",
+  Engineer: "🛠️", "Creative Thinker": "💡",
+};
+
+const COUNCIL_PROMPTS = [
+  "Should I start a new project or finish what I have?",
+  "Is this friendship worth keeping?",
+  "Should I take the risky path or the safe one?",
+];
+
+function CouncilTab({ token }: { token: string }) {
+  const [q, setQ] = useState("");
+  const [data, setData] = useState<CouncilResp | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState("");
+
+  async function convene(question: string) {
+    if (!question.trim()) return;
+    setBusy(true);
+    setErr("");
+    setData(null);
+    try {
+      const r = await askCouncil(token, question.trim());
+      setData(r);
+    } catch (e) {
+      setErr(
+        e instanceof Error && e.message === "unauthorized"
+          ? "Token rejected — re-enter your owner token."
+          : "Couldn't reach the council — try again.",
+      );
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <section className="mt-6">
+      <p className="text-xs text-zinc-500">
+        Ten minds — Scientist, Critic, Optimist, Strategist, Philosopher, Psychologist,
+        Historian, Entrepreneur, Engineer, Creative — weigh in on your dilemma, grounded
+        in your own principles.
+      </p>
+
+      <div className="mt-3 flex items-center gap-2">
+        <input
+          className="flex-1 rounded-lg border border-white/10 bg-black/40 px-3 py-2 text-sm outline-none focus:border-indigo-400"
+          placeholder="Ask the council a real question…"
+          value={q}
+          onChange={(e) => setQ(e.target.value)}
+          onKeyDown={(e) => { if (e.key === "Enter") convene(q); }}
+        />
+        <button
+          onClick={() => convene(q)}
+          disabled={busy || !q.trim()}
+          className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium hover:bg-indigo-500 disabled:opacity-40"
+        >
+          {busy ? "convening…" : "Convene"}
+        </button>
+      </div>
+
+      {!data && !busy && (
+        <div className="mt-3 flex flex-wrap gap-2">
+          {COUNCIL_PROMPTS.map((p) => (
+            <button
+              key={p}
+              onClick={() => { setQ(p); convene(p); }}
+              className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs text-zinc-400 hover:bg-white/10"
+            >
+              {p}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {err && <p className="mt-3 text-xs text-amber-400">{err}</p>}
+
+      {data && (
+        <div className="mt-5 space-y-4">
+          {/* Verdict */}
+          <div className="rounded-2xl border border-indigo-400/20 bg-indigo-500/5 p-4">
+            <div className="flex items-center justify-between">
+              <p className="text-xs font-semibold text-indigo-200">The council&apos;s verdict</p>
+              <span className="text-[10px] text-zinc-500">
+                {data.generated_by === "llm" ? "fused by Jerry" : "deterministic"}
+              </span>
+            </div>
+            <p className="mt-2 text-sm leading-relaxed text-zinc-100">{data.synthesis}</p>
+          </div>
+
+          {/* Individual minds */}
+          <ul className="space-y-2">
+            {data.takes.map((t) => (
+              <li key={t.mind} className="rounded-xl border border-white/10 bg-white/5 p-3">
+                <p className="text-sm font-medium text-zinc-200">
+                  {MIND_ICON[t.mind] || "•"} {t.mind}
+                  <span className="ml-2 text-[11px] font-normal text-zinc-500">{t.lens}</span>
+                </p>
+                <p className="mt-1 text-sm text-zinc-300">{t.take}</p>
+                {t.draws_on.length > 0 && (
+                  <p className="mt-1 text-[10px] text-zinc-600">from your principles</p>
+                )}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
     </section>
   );
 }
