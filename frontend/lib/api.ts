@@ -520,6 +520,39 @@ export async function fetchPhilosophy(token: string): Promise<PhilosophyResp> {
   return companionGet<PhilosophyResp>("/cognitive/philosophy", token, 90000);
 }
 
+// Truths — the Meta-Wisdom apex (principles promoted past a truthhood threshold).
+export interface TruthComponents {
+  confidence: number;
+  evidence: number;
+  longevity: number;
+  sources: number;
+  stability: number;
+}
+export interface Truth {
+  key: string;
+  statement: string;
+  category: string;
+  truthhood: number;
+  components: TruthComponents;
+  confidence: number;
+  evidence_count: number;
+  first_seen: string;
+  sources: string[];
+  contradicted: boolean;
+  to_truth?: number;
+}
+export interface TruthsResp {
+  ready: boolean;
+  note?: string;
+  threshold?: number;
+  truth_count?: number;
+  truths?: Truth[];
+  emerging?: Truth[];
+}
+export async function fetchTruths(token: string): Promise<TruthsResp> {
+  return companionGet<TruthsResp>("/cognitive/truths", token, 40000);
+}
+
 export async function fetchMonthReview(token: string, ym?: string): Promise<ReviewResp2> {
   const q = ym ? `?month=${encodeURIComponent(ym)}` : "";
   return companionGet<ReviewResp2>(`/journal/review/month${q}`, token);

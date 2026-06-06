@@ -10,6 +10,7 @@ import {
   fetchTimeline,
   fetchPhilosophy,
   fetchPrinciples,
+  fetchTruths,
   fetchWisdom,
   fetchYearReview,
   JournalDay,
@@ -19,6 +20,8 @@ import {
   PrinciplesResp,
   ReflectionResp,
   ReviewResp2,
+  Truth,
+  TruthsResp,
   WisdomInsight,
   WisdomResp,
 } from "@/lib/api";
@@ -515,6 +518,7 @@ const STATUS_TONE: Record<Principle["status"], string> = {
 function PrinciplesTab({ token }: { token: string }) {
   const [data, setData] = useState<PrinciplesResp | null>(null);
   const [philo, setPhilo] = useState<PhilosophyResp | null>(null);
+  const [truths, setTruths] = useState<TruthsResp | null>(null);
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState("");
 
@@ -522,13 +526,13 @@ function PrinciplesTab({ token }: { token: string }) {
     let alive = true;
     setLoading(true);
     setErr("");
-    // Build/persist principles first, then read their evolution & contradictions.
+    // Build/persist principles first, then read their evolution, contradictions & truths.
     fetchPrinciples(token)
       .then((d) => {
         if (alive) setData(d);
-        return fetchPhilosophy(token);
+        return Promise.all([fetchPhilosophy(token), fetchTruths(token)]);
       })
-      .then((p) => { if (alive) setPhilo(p); })
+      .then(([p, t]) => { if (alive) { setPhilo(p); setTruths(t); } })
       .catch(() => { if (alive) setErr("Couldn't load principles — try again."); })
       .finally(() => { if (alive) setLoading(false); });
     return () => { alive = false; };
@@ -547,6 +551,58 @@ function PrinciplesTab({ token }: { token: string }) {
 
   return (
     <section className="mt-6 space-y-6">
+      {/* Truths (Meta-Wisdom apex) */}
+      {(truths?.truth_count ?? 0) > 0 && (
+        <div className="rounded-2xl border border-amber-300/30 bg-gradient-to-b from-amber-500/10 to-transparent p-4">
+          <p className="text-sm font-semibold text-amber-200">🏛 Truths</p>
+          <ul className="mt-3 space-y-2">
+            {truths!.truths!.map((t) => (
+              <li key={t.key} className="text-sm text-zinc-100">
+                <span className="mr-1.5 text-amber-300">✦</span>{t.statement}
+                <span className="ml-1 text-[11px] text-zinc-500">
+                  ({Math.round(t.truthhood * 100)}%)
+                </span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      {/* Emerging truths — watch them climb */}
+      {(truths?.emerging?.length ?? 0) > 0 && (
+        <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
+          <p className="text-xs font-semibold text-zinc-300">
+            Emerging truths{" "}
+            <span className="text-zinc-600">
+              (toward the {Math.round((truths!.threshold ?? 0.7) * 100)}% bar)
+            </span>
+          </p>
+          <ul className="mt-3 space-y-3">
+            {truths!.emerging!.map((t) => (
+              <li key={t.key}>
+                <div className="flex items-start justify-between gap-3">
+                  <p className="text-sm text-zinc-200">{t.statement}</p>
+                  <span className="shrink-0 text-xs text-zinc-500">{Math.round(t.truthhood * 100)}%</span>
+                </div>
+                <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-white/5">
+                  <div
+                    className="h-full rounded-full bg-amber-400/60"
+                    style={{ width: `${Math.min(100, (t.truthhood / (truths!.threshold ?? 0.7)) * 100)}%` }}
+                  />
+                </div>
+                <div className="mt-1 flex flex-wrap gap-1.5 text-[10px] text-zinc-600">
+                  {(["confidence", "evidence", "longevity", "sources", "stability"] as const).map((k) => (
+                    <span key={k} className="rounded bg-white/5 px-1.5 py-0.5">
+                      {k} {Math.round((t.components[k] ?? 0) * 100)}%
+                    </span>
+                  ))}
+                </div>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
       {/* Personal Commandments */}
       {(data.commandments?.length ?? 0) > 0 && (
         <div className="rounded-2xl border border-indigo-400/20 bg-indigo-500/5 p-4">
