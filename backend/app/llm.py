@@ -30,8 +30,11 @@ def complete(system: str, user: str, *, temperature: float = 0.3) -> str | None:
             return _ollama(system, user, temperature)
         if provider == "anthropic" and settings.anthropic_api_key:
             return _anthropic(system, user, temperature)
-    except (httpx.HTTPError, KeyError, ValueError) as exc:
-        log.warning("LLM call failed (%s); using deterministic fallback: %s", provider, exc)
+    except Exception as exc:  # noqa: BLE001 — the model is never allowed to break a reply
+        # Any failure (unreachable host, bad URL, malformed response, timeout,
+        # IPv6/DNS error) must degrade to the deterministic answer, never 500.
+        log.warning("LLM call failed (%s: %s); using deterministic fallback: %s",
+                    provider, type(exc).__name__, exc)
     return None
 
 
