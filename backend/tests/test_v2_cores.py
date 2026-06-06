@@ -79,6 +79,12 @@ from app.self_evolution import adapt_weights, learned_priorities, weight_shift  
 from app.provenance import build_provenance, audit_trail  # noqa: E402
 from app.event_simulator import simulate, compare  # noqa: E402
 from app.thought_capture import classify_capture  # noqa: E402
+from app.wisdom_engine import (  # noqa: E402
+    synthesize as wisdom_synthesize,
+    from_decision_patterns as wisdom_from_decisions,
+    from_habits as wisdom_from_habits,
+    from_struggles as wisdom_from_struggles,
+)
 from app.companion import (  # noqa: E402
     mask_numbers, qualitative_money, redact_evidence, disclosure_policy,
     compose_friend_answer,
@@ -337,8 +343,62 @@ def test_personal_os_composes_navigation_map():
     # Leverage sorted by impact desc.
     impacts = [p["impact"] for p in nav["leverage_points"]]
     assert impacts == sorted(impacts, reverse=True)
-    print("personal OS:", "distance=", nav["distance"]["overall"],
-          "obstacles=", len(nav["obstacles"]), "leverage=", len(nav["leverage_points"]))
+
+
+# --- Wisdom Engine: distilling lessons from patterns -----------------------
+def test_wisdom_decision_patterns_split_success_and_pitfall():
+    decisions = {"patterns": [
+        {"name": "collaborative", "lift": 0.4, "confidence": 0.6, "observation": "obs1"},
+        {"name": "busy_start", "lift": -0.5, "confidence": 0.7, "observation": "obs2"},
+        {"name": "busy_start", "lift": 0.05, "confidence": 0.9, "observation": "weak"},  # below threshold
+    ]}
+    out = wisdom_from_decisions(decisions)
+    assert len(out) == 2  # the weak one is dropped
+    cats = {o.category for o in out}
+    assert cats == {"success_pattern", "pitfall"}
+
+
+def test_wisdom_habits_growth_driver_vs_revive_lesson():
+    habits = {"confidence": 0.7, "habits": [
+        {"name": "Gym", "stage": "stable", "consistency": 0.8, "outcome_correlation": 0.6},
+        {"name": "Guitar", "stage": "dormant", "consistency": 0.3, "outcome_correlation": 0.5},
+        {"name": "Reading", "stage": "stable", "consistency": 0.2, "outcome_correlation": 0.1},  # weak corr
+    ]}
+    out = wisdom_from_habits(habits)
+    assert len(out) == 2
+    by_name = {o.statement.split()[0]: o.category for o in out}  # crude lookup
+    assert any(o.category == "growth_driver" for o in out)
+    assert any(o.category == "lesson" for o in out)
+
+
+def test_wisdom_struggles_need_recurrence():
+    out = wisdom_from_struggles([
+        {"theme": "Relationships", "count": 4, "total": 10},
+        {"theme": "Health", "count": 2, "total": 10},  # below 3 → dropped
+    ])
+    assert len(out) == 1
+    assert out[0].category == "lesson" and "Relationships" in out[0].statement
+
+
+def test_wisdom_synthesize_ranks_dedups_and_counts():
+    decisions = {"patterns": [
+        {"name": "collaborative", "lift": 0.4, "confidence": 0.6, "observation": "o"},
+    ]}
+    habits = {"confidence": 0.9, "habits": [
+        {"name": "Gym", "stage": "stable", "consistency": 0.9, "outcome_correlation": 0.9},
+    ]}
+    you = {"confidence": 0.8, "value_profile": ["going deep on one thing", "momentum"]}
+    out = wisdom_synthesize(decisions=decisions, habits=habits, you_model=you)
+    assert out["ready"]
+    assert {"success_pattern", "growth_driver", "philosophy"} <= set(out["category_counts"])
+    # Ranked by strength*confidence descending.
+    scored = [w["strength"] * w["confidence"] for w in out["wisdom"]]
+    assert scored == sorted(scored, reverse=True)
+
+
+def test_wisdom_empty_is_not_ready():
+    out = wisdom_synthesize()
+    assert out["ready"] is False and out["wisdom"] == []
 
 
 def test_knowledge_graph_recovers_evolution_spine():

@@ -18,6 +18,7 @@ from .. import (
     prediction_engine,
     self_model,
     trend_engine,
+    wisdom_engine,
     you_model,
 )
 from ..db import get_db
@@ -84,6 +85,13 @@ def get_decisions(db: Session = Depends(get_db)):
 def get_blind_spots(db: Session = Depends(get_db)):
     """Blind spots: hidden structures synthesised across the cognitive engines."""
     return blind_spots.build(db)
+
+
+@router.get("/wisdom")
+def get_wisdom(db: Session = Depends(get_db)):
+    """Wisdom: distilled life lessons (success patterns, pitfalls, growth drivers,
+    recurring lessons, core philosophy) synthesised from your own history."""
+    return wisdom_engine.build(db)
 
 
 @router.get("/os")
