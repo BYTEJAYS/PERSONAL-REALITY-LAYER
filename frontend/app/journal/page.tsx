@@ -8,10 +8,13 @@ import {
   fetchMonthReview,
   fetchReflection,
   fetchTimeline,
+  fetchPrinciples,
   fetchWisdom,
   fetchYearReview,
   JournalDay,
   JournalFullEntry,
+  Principle,
+  PrinciplesResp,
   ReflectionResp,
   ReviewResp2,
   WisdomInsight,
@@ -35,7 +38,7 @@ function thisMonthISO(): string {
 export default function JournalPage() {
   const [token, setToken] = useState("");
   const [tokenInput, setTokenInput] = useState("");
-  const [tab, setTab] = useState<"journal" | "reviews" | "wisdom">("journal");
+  const [tab, setTab] = useState<"journal" | "reviews" | "wisdom" | "principles">("journal");
 
   const [days, setDays] = useState<JournalDay[]>([]);
   const [loading, setLoading] = useState(false);
@@ -235,7 +238,7 @@ export default function JournalPage() {
 
         {/* Tabs */}
         <div className="mt-5 flex gap-1 rounded-full border border-white/10 bg-white/5 p-1 text-sm">
-          {(["journal", "reviews", "wisdom"] as const).map((t) => (
+          {(["journal", "reviews", "wisdom", "principles"] as const).map((t) => (
             <button
               key={t}
               onClick={() => setTab(t)}
@@ -416,8 +419,10 @@ export default function JournalPage() {
           </>
         ) : tab === "reviews" ? (
           <ReviewsTab token={token} />
-        ) : (
+        ) : tab === "wisdom" ? (
           <WisdomTab token={token} />
+        ) : (
+          <PrinciplesTab token={token} />
         )}
       </div>
     </main>
@@ -494,6 +499,105 @@ function WisdomTab({ token }: { token: string }) {
           </div>
         );
       })}
+    </section>
+  );
+}
+
+const STATUS_TONE: Record<Principle["status"], string> = {
+  active: "text-emerald-400",
+  forming: "text-sky-400",
+  weakening: "text-amber-400",
+  dormant: "text-zinc-500",
+};
+
+function PrinciplesTab({ token }: { token: string }) {
+  const [data, setData] = useState<PrinciplesResp | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [err, setErr] = useState("");
+
+  useEffect(() => {
+    let alive = true;
+    setLoading(true);
+    setErr("");
+    fetchPrinciples(token)
+      .then((d) => { if (alive) setData(d); })
+      .catch(() => { if (alive) setErr("Couldn't load principles — try again."); })
+      .finally(() => { if (alive) setLoading(false); });
+    return () => { alive = false; };
+  }, [token]);
+
+  if (loading) return <p className="mt-6 text-sm text-zinc-500">reconciling your principles…</p>;
+  if (err) return <p className="mt-6 text-xs text-amber-400">{err}</p>;
+  if (!data?.ready || !data.principles?.length) {
+    return (
+      <p className="mt-6 text-sm text-zinc-500">
+        No principles yet. As lessons recur and gather evidence, they graduate into
+        principles you live by — and you&apos;ll see them strengthen here over time. 🌱
+      </p>
+    );
+  }
+
+  return (
+    <section className="mt-6 space-y-6">
+      {/* Personal Commandments */}
+      {(data.commandments?.length ?? 0) > 0 && (
+        <div className="rounded-2xl border border-indigo-400/20 bg-indigo-500/5 p-4">
+          <p className="text-sm font-semibold text-indigo-200">📜 Principles I Live By</p>
+          <ol className="mt-3 space-y-2">
+            {data.commandments!.map((c, i) => (
+              <li key={i} className="flex gap-3 text-sm text-zinc-100">
+                <span className="shrink-0 font-mono text-indigo-300">{i + 1}.</span>
+                <span>{c.statement}</span>
+              </li>
+            ))}
+          </ol>
+        </div>
+      )}
+
+      {/* Recent changes */}
+      {(data.recent_changes?.length ?? 0) > 0 && (
+        <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
+          <p className="text-xs font-semibold text-zinc-300">What shifted</p>
+          <ul className="mt-2 space-y-1">
+            {data.recent_changes!.map((c, i) => (
+              <li key={i} className="text-xs text-zinc-400">
+                <span className={
+                  c.event === "strengthened" ? "text-emerald-400"
+                  : c.event === "weakened" || c.event === "faded" ? "text-amber-400"
+                  : "text-sky-400"
+                }>{c.event}</span>
+                {" · "}{c.statement}
+                {c.from != null && c.to != null && (
+                  <span className="text-zinc-600"> ({c.from}→{c.to})</span>
+                )}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      {/* All principles */}
+      <div>
+        <p className="text-xs font-medium text-zinc-400">
+          All principles <span className="text-zinc-600">({data.principle_count})</span>
+        </p>
+        <ul className="mt-2 space-y-2">
+          {data.principles!.map((p) => (
+            <li key={p.key} className="rounded-xl border border-white/10 bg-white/5 p-3">
+              <p className="text-sm text-zinc-100">{p.statement}</p>
+              <div className="mt-1.5 flex flex-wrap items-center gap-2 text-[11px] text-zinc-500">
+                <span className={`font-medium ${STATUS_TONE[p.status]}`}>{p.status}</span>
+                <span className="rounded-full bg-white/5 px-2 py-0.5">{p.category.replace("_", " ")}</span>
+                <span className="rounded-full bg-white/5 px-2 py-0.5">conf {Math.round(p.confidence * 100)}%</span>
+                <span className="rounded-full bg-white/5 px-2 py-0.5">{p.evidence_count} data pts</span>
+                {p.history.length > 1 && (
+                  <span className="rounded-full bg-white/5 px-2 py-0.5">{p.history.length} updates</span>
+                )}
+              </div>
+            </li>
+          ))}
+        </ul>
+      </div>
     </section>
   );
 }

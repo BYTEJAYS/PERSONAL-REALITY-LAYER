@@ -445,6 +445,45 @@ export async function fetchWisdom(token: string): Promise<WisdomResp> {
   return companionGet<WisdomResp>("/cognitive/wisdom", token, 30000);
 }
 
+// Principles — persistent, evolving lessons + Personal Commandments.
+export interface PrincipleHistory {
+  ts: string;
+  confidence: number;
+  evidence_count: number;
+  event: string;
+}
+export interface Principle {
+  key: string;
+  statement: string;
+  category: string;
+  confidence: number;
+  evidence_count: number;
+  strength: number;
+  status: "forming" | "active" | "weakening" | "dormant";
+  exceptions: string[];
+  first_seen: string;
+  last_reinforced: string;
+  history: PrincipleHistory[];
+}
+export interface Commandment {
+  statement: string;
+  category: string;
+  confidence: number;
+  evidence_count: number;
+}
+export interface PrinciplesResp {
+  ready: boolean;
+  note?: string;
+  principle_count?: number;
+  status_counts?: Record<string, number>;
+  commandments?: Commandment[];
+  principles?: Principle[];
+  recent_changes?: { key: string; event: string; statement: string; from?: number; to?: number }[];
+}
+export async function fetchPrinciples(token: string): Promise<PrinciplesResp> {
+  return companionGet<PrinciplesResp>("/cognitive/principles", token, 40000);
+}
+
 export async function fetchMonthReview(token: string, ym?: string): Promise<ReviewResp2> {
   const q = ym ? `?month=${encodeURIComponent(ym)}` : "";
   return companionGet<ReviewResp2>(`/journal/review/month${q}`, token);
