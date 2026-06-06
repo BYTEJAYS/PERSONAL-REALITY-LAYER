@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends, HTTPException
+from pydantic import BaseModel
+from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from .. import ingest_service
@@ -10,6 +12,25 @@ from ..ingestion.text_ingest import ingest_text
 from ..schemas import ConnectorRunIn, GitIngestIn, TextIngestIn
 
 router = APIRouter(prefix="/ingest", tags=["ingest"])
+
+
+class ResetIn(BaseModel):
+    confirm: str  # must equal "WIPE" — guards against accidental fire
+
+
+@router.post("/reset")
+def reset_all(body: ResetIn, db: Session = Depends(get_db)):
+    """Owner-only: wipe ALL memory data for a clean re-ingest. Irreversible.
+
+    Truncates memories, entities and their links. Owner-gated by the global
+    owner_guard middleware; the {"confirm":"WIPE"} body is a second safety.
+    """
+    if body.confirm != "WIPE":
+        raise HTTPException(status_code=400, detail='Send {"confirm": "WIPE"} to proceed.')
+    before = db.execute(text("SELECT count(*) FROM memories")).scalar() or 0
+    db.execute(text("TRUNCATE memories, entities, memory_entities RESTART IDENTITY CASCADE"))
+    db.commit()
+    return {"wiped": True, "memories_deleted": int(before)}
 
 
 @router.get("/connectors")
