@@ -401,6 +401,73 @@ def test_wisdom_empty_is_not_ready():
     assert out["ready"] is False and out["wisdom"] == []
 
 
+# --- Principle Engine: persistent, evolving principles ---------------------
+from app.principle_engine import reconcile as pr_reconcile, commandments as pr_commandments  # noqa: E402
+
+
+def test_principle_forms_then_strengthens():
+    now1 = "2026-01-01T00:00:00+00:00"
+    cand = [{"key": "habit:Gym", "statement": "Gym lifts your weeks.", "category": "growth_driver",
+             "confidence": 0.5, "strength": 0.6, "evidence_count": 4}]
+    principles, events = pr_reconcile([], cand, now1)
+    assert len(principles) == 1
+    p = principles[0]
+    assert p["status"] == "active" and p["first_seen"] == now1
+    assert events[0]["event"] == "formed"
+
+    # Re-observed later with higher confidence → strengthens + records history.
+    now2 = "2026-02-01T00:00:00+00:00"
+    cand2 = [{**cand[0], "confidence": 0.8, "evidence_count": 9}]
+    p2list, events2 = pr_reconcile(principles, cand2, now2)
+    p2 = p2list[0]
+    assert p2["confidence"] == 0.8 and p2["evidence_count"] == 9
+    assert p2["first_seen"] == now1 and p2["last_reinforced"] == now2
+    assert any(h["event"] == "strengthened" for h in p2["history"])
+    assert any(e["event"] == "strengthened" for e in events2)
+
+
+def test_principle_evidence_never_regresses():
+    now = "2026-03-01T00:00:00+00:00"
+    existing = [{"key": "k", "statement": "s", "category": "lesson", "confidence": 0.7,
+                 "evidence_count": 10, "strength": 0.5, "status": "active",
+                 "first_seen": now, "last_reinforced": now, "history": []}]
+    # New observation with FEWER data points must not lower the earned evidence.
+    out, _ = pr_reconcile(existing, [{"key": "k", "statement": "s", "category": "lesson",
+                                      "confidence": 0.7, "strength": 0.5, "evidence_count": 2}], now)
+    assert out[0]["evidence_count"] == 10
+
+
+def test_principle_fades_only_when_stale():
+    old = "2026-01-01T00:00:00+00:00"
+    now = "2026-06-01T00:00:00+00:00"  # ~5 months later
+    existing = [{"key": "k", "statement": "s", "category": "lesson", "confidence": 0.6,
+                 "evidence_count": 5, "strength": 0.5, "status": "active",
+                 "first_seen": old, "last_reinforced": old, "history": []}]
+    out, events = pr_reconcile(existing, [], now)  # not supported this run
+    assert out[0]["confidence"] < 0.6 and out[0]["status"] in ("weakening", "dormant")
+    assert any(e["event"] == "faded" for e in events)
+
+    # But a recently-reinforced unsupported principle is left untouched.
+    recent = [{**existing[0], "last_reinforced": "2026-05-28T00:00:00+00:00", "confidence": 0.6}]
+    out2, _ = pr_reconcile(recent, [], now)
+    assert out2[0]["confidence"] == 0.6
+
+
+def test_commandments_rank_and_diversify():
+    base = lambda **k: {"status": "active", "confidence": 0.8, "evidence_count": 5,
+                        "category": "lesson", "statement": "x", **k}
+    principles = [
+        base(key="a", confidence=0.9, evidence_count=20, category="philosophy"),
+        base(key="b", confidence=0.85, evidence_count=10, category="lesson"),
+        base(key="c", confidence=0.4, evidence_count=2, category="lesson"),
+        base(key="d", confidence=0.2, evidence_count=1, status="weakening"),  # excluded (low conf)
+    ]
+    cmds = pr_commandments(principles, n=10, max_per_category=4)
+    keys = [c["key"] for c in cmds]
+    assert keys[0] == "a"  # highest conviction first
+    assert "d" not in keys  # below threshold / weakening dropped
+
+
 def test_knowledge_graph_recovers_evolution_spine():
     # first_seen as day-offsets; the spec's chain co-occurs sequentially.
     chain = ["Python", "FastAPI", "Backend", "Fraud Detection", "ML", "Graph Intelligence", "PRL"]

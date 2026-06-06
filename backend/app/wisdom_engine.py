@@ -41,6 +41,11 @@ class WisdomInsight:
     strength: float        # 0..1 how strong the underlying signal is
     sources: list[str] = field(default_factory=list)
     evidence: list[str] = field(default_factory=list)
+    # Stable identity (so the Principle Engine can reinforce the same insight across
+    # runs) + how many real data points back it.
+    key: str = ""
+    evidence_count: int = 1
+    exceptions: list[str] = field(default_factory=list)
 
 
 # --- pure detectors ---------------------------------------------------------
@@ -76,6 +81,8 @@ def from_decision_patterns(decisions: dict) -> list[WisdomInsight]:
             strength=round(min(1.0, abs(lift)), 3),
             sources=["decision_genome"],
             evidence=[obs] if obs else [],
+            key=f"decision:{name}:{'pos' if positive else 'neg'}",
+            evidence_count=int(p.get("sample", 1)),
         ))
     return out
 
@@ -92,6 +99,7 @@ def from_habits(habits: dict) -> list[WisdomInsight]:
         name = h.get("name", "this")
         stage = h.get("stage", "")
         cons = h.get("consistency", 0.0)
+        ec = int(sum((h.get("evidence") or {}).get("weekly", []))) or 1
         if stage in ("declining", "dormant", "dead"):
             out.append(WisdomInsight(
                 category="lesson",
@@ -101,6 +109,7 @@ def from_habits(habits: dict) -> list[WisdomInsight]:
                 strength=round(min(1.0, corr), 3),
                 sources=["habit_genome"],
                 evidence=[f"outcome correlation {corr}", f"stage: {stage}"],
+                key=f"habit:{name}", evidence_count=ec,
             ))
         else:
             out.append(WisdomInsight(
@@ -111,6 +120,7 @@ def from_habits(habits: dict) -> list[WisdomInsight]:
                 strength=round(min(1.0, corr), 3),
                 sources=["habit_genome"],
                 evidence=[f"outcome correlation {corr}", f"consistency {cons}"],
+                key=f"habit:{name}", evidence_count=ec,
             ))
     return out
 
@@ -121,6 +131,7 @@ def from_values(you_model: dict) -> list[WisdomInsight]:
     if not profile:
         return []
     conf = (you_model or {}).get("confidence", 0.5)
+    pairs = int((you_model or {}).get("data_basis", {}).get("comparison_pairs", 0))
     joined = ", ".join(profile[:3])
     return [WisdomInsight(
         category="philosophy",
@@ -130,6 +141,7 @@ def from_values(you_model: dict) -> list[WisdomInsight]:
         strength=round(min(1.0, 0.5 + conf / 2), 3),
         sources=["you_model"],
         evidence=list(profile[:4]),
+        key="values", evidence_count=pairs or len(profile),
     )]
 
 
@@ -142,6 +154,7 @@ def from_blind_spots(blind: dict) -> list[WisdomInsight]:
         if s.get("category") != "misalignment":
             continue
         finding = s.get("finding") or s.get("title", "")
+        slug = (s.get("title", "") or "gap").lower().replace(" ", "_")[:40]
         out.append(WisdomInsight(
             category="lesson",
             statement=f"{finding} — a gap between what you say matters and where your "
@@ -150,6 +163,7 @@ def from_blind_spots(blind: dict) -> list[WisdomInsight]:
             strength=round(s.get("severity", 0.5), 3),
             sources=["identity"],
             evidence=[finding] if finding else [],
+            key=f"misalign:{slug}", evidence_count=1,
         ))
     return out
 
@@ -173,6 +187,7 @@ def from_struggles(struggles: list[dict]) -> list[WisdomInsight]:
             strength=round(min(1.0, share + 0.2), 3),
             sources=["journal"],
             evidence=[f"{count} of {total} entries"],
+            key=f"struggle:{theme}", evidence_count=count,
         ))
     return out
 

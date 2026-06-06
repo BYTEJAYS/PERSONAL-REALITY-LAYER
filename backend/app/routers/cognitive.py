@@ -16,6 +16,7 @@ from .. import (
     pattern_engine,
     personal_os,
     prediction_engine,
+    principle_engine,
     self_model,
     trend_engine,
     wisdom_engine,
@@ -92,6 +93,14 @@ def get_wisdom(db: Session = Depends(get_db)):
     """Wisdom: distilled life lessons (success patterns, pitfalls, growth drivers,
     recurring lessons, core philosophy) synthesised from your own history."""
     return wisdom_engine.build(db)
+
+
+@router.get("/principles")
+def get_principles(db: Session = Depends(get_db)):
+    """Principles: persistent, evolving lessons (confidence, evidence, history of
+    how each strengthened/weakened) + your Personal Commandments. Reconciles fresh
+    wisdom into the standing set and records the evolution."""
+    return principle_engine.build(db)
 
 
 @router.get("/os")

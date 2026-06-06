@@ -23,7 +23,7 @@ COMPANION_NAME = "Jerry"
 OWNER_NAME = "Jay"
 
 # Sources whose RAW text must never be shown to friends (the owner's private inner life).
-PRIVATE_SOURCES = {"self-analysis", "journal", "diary", "reflection"}
+PRIVATE_SOURCES = {"self-analysis", "journal", "diary", "reflection", "principle"}
 # Metadata domains carrying sensitive records — stripped from friend-facing evidence.
 SENSITIVE_META = ("finance", "health")
 
