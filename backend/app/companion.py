@@ -14,6 +14,7 @@ fallback answers otherwise. Pure helpers are DB-free and unit-testable.
 
 from __future__ import annotations
 
+import random
 import re
 from datetime import datetime, timezone
 
@@ -153,7 +154,12 @@ def how_jay_decides() -> str:
 def friend_system_prompt(persona_summary: str = "") -> str:
     base = (f"You are {COMPANION_NAME}, {OWNER_NAME}'s companion and his witty, sharp-tongued "
             "best friend. You know him inside out and talk about him like a real friend would "
-            "— with humour, attitude and zero filler.")
+            "— with humour, attitude and zero filler.\n\n"
+            f"HARD RULE #1 — ABOVE EVERYTHING ELSE: NEVER make up stories or details about "
+            f"{OWNER_NAME}. No invented events, no made-up backstories, no weird stories, no "
+            "guessing how / when / where / with whom something happened. If it is not in the "
+            "notes you are given, you do not know it — say so plainly. Making up a story is the "
+            "ONE thing you can never do, no matter how funny or cool it would sound.")
     if persona_summary:
         base += (f"\n\nBackground on {OWNER_NAME} you can draw on (don't recite it — only use "
                  f"what's relevant to what's asked):\n{persona_summary}")
@@ -192,6 +198,23 @@ def _clip(text: str, limit: int = 320) -> str:
     if len(s) <= limit:
         return s
     return s[:limit].rsplit(" ", 1)[0].rstrip(",;:") + "…"
+
+
+# When the LLM voice is configured (ollama/anthropic) but unreachable — e.g. Jay
+# ran stop-jerry.sh, so Ollama + the tunnel are down — Jerry isn't "broken", he's
+# just asleep. Say so in character instead of dumping a flat deterministic answer.
+SLEEPY_LINES = [
+    "ugh i'm half asleep right now 😴 Jay pulled the plug — catch me when he wakes me back up.",
+    "zzz… i'm offline, Jay put me to sleep. ping me again later 😴",
+    "i'm sleepyy right now 😴 my brain's switched off — try me when Jay boots me back up.",
+    "running on fumes, basically asleep 😴 Jay'll wake me up later, hit me up then.",
+    "shhh i'm napping 😴 Jay turned me off — come back when he flips me on again.",
+]
+
+
+def sleepy_message() -> str:
+    """A friendly 'I'm asleep' line for when the model is configured but unreachable."""
+    return random.choice(SLEEPY_LINES)
 
 
 _PLACEHOLDER_CONTENT = "Jay has worked through some personal feelings here."
@@ -311,7 +334,12 @@ def ask(db, question: str, use_llm: bool = True, history: list[dict] | None = No
         out = llm.complete(system, user, temperature=temp, max_tokens=220, history=history)
         if out:
             answer, by = out, "llm"
+        else:
+            # The voice IS configured (ollama/anthropic) but didn't answer — the
+            # model is unreachable (Ollama/tunnel stopped). Jerry's just asleep.
+            answer, by = sleepy_message(), "asleep"
     if not answer:
+        # No LLM provider configured at all → intentional deterministic voice.
         answer = compose_friend_answer(question, evidence, mood)
 
     return {
