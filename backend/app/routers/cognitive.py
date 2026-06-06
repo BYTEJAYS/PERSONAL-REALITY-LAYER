@@ -7,6 +7,7 @@ from .. import (
     blind_spots,
     chapters,
     cognitive_model,
+    council_of_minds,
     decision_genome,
     habit_genome,
     identity,
@@ -25,7 +26,7 @@ from .. import (
     you_model,
 )
 from ..db import get_db
-from ..schemas import DecideIn
+from ..schemas import CouncilIn, DecideIn
 
 router = APIRouter(prefix="/cognitive", tags=["cognitive"])
 
@@ -148,6 +149,13 @@ def get_self_model(db: Session = Depends(get_db)):
 def get_you_model(db: Session = Depends(get_db)):
     """The You-Model: what you value, learned from your own behaviour (priors + revealed preference)."""
     return you_model.build(db)
+
+
+@router.post("/council")
+def post_council(payload: CouncilIn, db: Session = Depends(get_db)):
+    """Council of Minds: ten reasoning lenses deliberate on your question, grounded
+    in your principles & values, fused into one higher-order verdict."""
+    return council_of_minds.build(db, payload.question)
 
 
 @router.post("/decide")

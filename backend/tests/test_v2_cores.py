@@ -577,6 +577,40 @@ def test_truthhood_components_present_and_scored():
     assert comp["stability"] == 1.0
 
 
+# --- Council of Minds ------------------------------------------------------
+from app.council_of_minds import deliberate as council_deliberate, MINDS  # noqa: E402
+
+
+def test_council_all_minds_weigh_in():
+    out = council_deliberate("Should I start a new project?", [], [], [])
+    assert len(out["takes"]) == len(MINDS)
+    # With no data every mind still produces a non-empty take (its lens question).
+    assert all(t["take"].strip() for t in out["takes"])
+
+
+def test_council_grounds_takes_in_principles():
+    principles = [
+        {"key": "habit:Gym", "statement": "Gym lifts your weeks.", "category": "growth_driver",
+         "confidence": 0.8, "evidence_count": 10, "status": "active"},
+        {"key": "decision:busy_start:neg", "statement": "Busy-start projects get abandoned.",
+         "category": "pitfall", "confidence": 0.7, "evidence_count": 8, "status": "active"},
+    ]
+    cmds = [{"statement": "Protect your focus."}]
+    out = council_deliberate("Should I start a new project?", principles, ["going deep"], cmds)
+    drawn = {k for t in out["takes"] for k in t["draws_on"]}
+    assert "habit:Gym" in drawn or "decision:busy_start:neg" in drawn
+    # Philosopher leans on the value profile.
+    phil = next(t for t in out["takes"] if t["mind"] == "Philosopher")
+    assert "going deep" in phil["take"]
+    # Synthesis references the top commandment.
+    assert "Protect your focus." in out["synthesis"]
+
+
+def test_council_synthesis_honest_when_empty():
+    out = council_deliberate("What should I do?", [], [], [])
+    assert "Not enough recorded" in out["synthesis"]
+
+
 def test_knowledge_graph_recovers_evolution_spine():
     # first_seen as day-offsets; the spec's chain co-occurs sequentially.
     chain = ["Python", "FastAPI", "Backend", "Fraud Detection", "ML", "Graph Intelligence", "PRL"]

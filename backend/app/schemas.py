@@ -100,6 +100,10 @@ class DecideIn(BaseModel):
     options: list[DecideOption]
 
 
+class CouncilIn(BaseModel):
+    question: str
+
+
 class ConnectorRunIn(BaseModel):
     connector: str
     options: dict = {}
