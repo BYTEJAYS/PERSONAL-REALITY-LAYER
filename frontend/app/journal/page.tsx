@@ -518,6 +518,14 @@ const MIND_ICON: Record<string, string> = {
   Engineer: "🛠️", "Creative Thinker": "💡",
 };
 
+const STANCE_STYLE: Record<string, { label: string; cls: string }> = {
+  for: { label: "for", cls: "bg-emerald-500/15 text-emerald-300" },
+  against: { label: "against", cls: "bg-rose-500/15 text-rose-300" },
+  caution: { label: "caution", cls: "bg-amber-500/15 text-amber-300" },
+  depends: { label: "depends", cls: "bg-zinc-500/15 text-zinc-300" },
+  reframe: { label: "reframe", cls: "bg-violet-500/15 text-violet-300" },
+};
+
 const COUNCIL_PROMPTS = [
   "Should I start a new project or finish what I have?",
   "Is this friendship worth keeping?",
@@ -595,28 +603,62 @@ function CouncilTab({ token }: { token: string }) {
           {/* Verdict */}
           <div className="rounded-2xl border border-indigo-400/20 bg-indigo-500/5 p-4">
             <div className="flex items-center justify-between">
-              <p className="text-xs font-semibold text-indigo-200">The council&apos;s verdict</p>
+              <p className="text-xs font-semibold text-indigo-200">
+                {data.split ? "⚖️ The council is split" : "The council's verdict"}
+              </p>
               <span className="text-[10px] text-zinc-500">
                 {data.generated_by === "llm" ? "fused by Jerry" : "deterministic"}
               </span>
+            </div>
+            <div className="mt-2 flex flex-wrap gap-1.5 text-[10px]">
+              <span className="rounded-full bg-emerald-500/15 px-2 py-0.5 text-emerald-300">
+                {data.stance_counts.for} for
+              </span>
+              <span className="rounded-full bg-amber-500/15 px-2 py-0.5 text-amber-300">
+                {data.stance_counts.against_or_caution} caution
+              </span>
+              {data.stance_counts.depends > 0 && (
+                <span className="rounded-full bg-zinc-500/15 px-2 py-0.5 text-zinc-300">
+                  {data.stance_counts.depends} depends
+                </span>
+              )}
             </div>
             <p className="mt-2 text-sm leading-relaxed text-zinc-100">{data.synthesis}</p>
           </div>
 
           {/* Individual minds */}
           <ul className="space-y-2">
-            {data.takes.map((t) => (
-              <li key={t.mind} className="rounded-xl border border-white/10 bg-white/5 p-3">
-                <p className="text-sm font-medium text-zinc-200">
-                  {MIND_ICON[t.mind] || "•"} {t.mind}
-                  <span className="ml-2 text-[11px] font-normal text-zinc-500">{t.lens}</span>
-                </p>
-                <p className="mt-1 text-sm text-zinc-300">{t.take}</p>
-                {t.draws_on.length > 0 && (
-                  <p className="mt-1 text-[10px] text-zinc-600">from your principles</p>
-                )}
-              </li>
-            ))}
+            {data.takes.map((t) => {
+              const s = STANCE_STYLE[t.stance] || STANCE_STYLE.depends;
+              const isDissent = data.dissent?.mind === t.mind;
+              return (
+                <li
+                  key={t.mind}
+                  className={`rounded-xl border bg-white/5 p-3 ${
+                    isDissent ? "border-amber-400/40" : "border-white/10"
+                  }`}
+                >
+                  <div className="flex items-center justify-between gap-2">
+                    <p className="text-sm font-medium text-zinc-200">
+                      {MIND_ICON[t.mind] || "•"} {t.mind}
+                      <span className="ml-2 text-[11px] font-normal text-zinc-500">{t.bias}</span>
+                    </p>
+                    <span className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] ${s.cls}`}>
+                      {s.label}
+                    </span>
+                  </div>
+                  <p className="mt-1 text-sm text-zinc-300">{t.take}</p>
+                  <div className="mt-1 flex items-center gap-2">
+                    {t.draws_on.length > 0 && (
+                      <span className="text-[10px] text-zinc-600">from your principles</span>
+                    )}
+                    {isDissent && (
+                      <span className="text-[10px] font-medium text-amber-400">sharpest dissent</span>
+                    )}
+                  </div>
+                </li>
+              );
+            })}
           </ul>
         </div>
       )}

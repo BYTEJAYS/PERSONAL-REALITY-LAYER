@@ -554,9 +554,12 @@ export async function fetchTruths(token: string): Promise<TruthsResp> {
 }
 
 // Council of Minds — ten reasoning lenses deliberate on a question.
+export type Stance = "for" | "against" | "caution" | "depends" | "reframe";
 export interface CouncilTake {
   mind: string;
   lens: string;
+  bias: string;
+  stance: Stance;
   take: string;
   draws_on: string[];
 }
@@ -565,6 +568,9 @@ export interface CouncilResp {
   question: string;
   panel: string[];
   takes: CouncilTake[];
+  stance_counts: { for: number; against_or_caution: number; depends: number; reframe: number };
+  split: boolean;
+  dissent: { mind: string; take: string } | null;
   synthesis: string;
   generated_by: string;
 }
