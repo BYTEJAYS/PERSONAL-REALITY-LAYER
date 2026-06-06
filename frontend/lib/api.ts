@@ -176,3 +176,66 @@ export async function correctCompanion(
     );
   return companionPost<ContributeReply>("/companion/contribute", token, { text, submitter });
 }
+
+// --- Owner review (owner token required) -----------------------------------
+
+async function companionGet<T>(path: string, token: string, timeoutMs = 15000): Promise<T> {
+  const ctrl = new AbortController();
+  const t = setTimeout(() => ctrl.abort(), timeoutMs);
+  try {
+    const res = await fetch(`${API}${path}`, {
+      headers: { "x-access-token": token },
+      cache: "no-store",
+      signal: ctrl.signal,
+    });
+    if (res.status === 401 || res.status === 403) throw new Error("unauthorized");
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    return (await res.json()) as T;
+  } finally {
+    clearTimeout(t);
+  }
+}
+
+export interface PendingItem {
+  id: string;
+  submitted_at?: string;
+  text: string;
+  submitter?: string;
+  kind?: string;
+  plausibility?: string;
+}
+export interface PendingResp {
+  pending_count: number;
+  pending: PendingItem[];
+}
+export async function fetchPending(token: string): Promise<PendingResp> {
+  return companionGet<PendingResp>("/companion/pending", token);
+}
+
+export interface FriendQuestion {
+  text: string;
+  asked_at?: string;
+  count?: number;
+  submitter?: string;
+}
+export interface QuestionsResp {
+  question_count: number;
+  questions: FriendQuestion[];
+}
+export async function fetchFriendQuestions(token: string): Promise<QuestionsResp> {
+  return companionGet<QuestionsResp>("/companion/questions", token);
+}
+
+export interface ReviewResp {
+  id: string;
+  decision: string;
+  message: string;
+}
+export async function reviewContribution(
+  token: string,
+  memory_id: string,
+  approve: boolean,
+  importance = 0.6,
+): Promise<ReviewResp> {
+  return companionPost<ReviewResp>("/companion/review", token, { memory_id, approve, importance });
+}
