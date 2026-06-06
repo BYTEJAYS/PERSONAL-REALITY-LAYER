@@ -426,6 +426,25 @@ export interface ReviewResp2 {
   headline?: string;
   chapters?: ReviewChapter[];
 }
+// Wisdom — distilled life lessons synthesised from your own history.
+export interface WisdomInsight {
+  category: "success_pattern" | "pitfall" | "growth_driver" | "lesson" | "philosophy";
+  statement: string;
+  confidence: number;
+  strength: number;
+  sources: string[];
+  evidence: string[];
+}
+export interface WisdomResp {
+  ready: boolean;
+  note?: string;
+  category_counts?: Record<string, number>;
+  wisdom?: WisdomInsight[];
+}
+export async function fetchWisdom(token: string): Promise<WisdomResp> {
+  return companionGet<WisdomResp>("/cognitive/wisdom", token, 30000);
+}
+
 export async function fetchMonthReview(token: string, ym?: string): Promise<ReviewResp2> {
   const q = ym ? `?month=${encodeURIComponent(ym)}` : "";
   return companionGet<ReviewResp2>(`/journal/review/month${q}`, token);

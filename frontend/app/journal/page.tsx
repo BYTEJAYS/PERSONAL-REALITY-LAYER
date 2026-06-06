@@ -8,11 +8,14 @@ import {
   fetchMonthReview,
   fetchReflection,
   fetchTimeline,
+  fetchWisdom,
   fetchYearReview,
   JournalDay,
   JournalFullEntry,
   ReflectionResp,
   ReviewResp2,
+  WisdomInsight,
+  WisdomResp,
 } from "@/lib/api";
 
 const OWNER_KEY = "prl_owner_token";
@@ -32,7 +35,7 @@ function thisMonthISO(): string {
 export default function JournalPage() {
   const [token, setToken] = useState("");
   const [tokenInput, setTokenInput] = useState("");
-  const [tab, setTab] = useState<"journal" | "reviews">("journal");
+  const [tab, setTab] = useState<"journal" | "reviews" | "wisdom">("journal");
 
   const [days, setDays] = useState<JournalDay[]>([]);
   const [loading, setLoading] = useState(false);
@@ -232,7 +235,7 @@ export default function JournalPage() {
 
         {/* Tabs */}
         <div className="mt-5 flex gap-1 rounded-full border border-white/10 bg-white/5 p-1 text-sm">
-          {(["journal", "reviews"] as const).map((t) => (
+          {(["journal", "reviews", "wisdom"] as const).map((t) => (
             <button
               key={t}
               onClick={() => setTab(t)}
@@ -411,11 +414,87 @@ export default function JournalPage() {
               )}
             </section>
           </>
-        ) : (
+        ) : tab === "reviews" ? (
           <ReviewsTab token={token} />
+        ) : (
+          <WisdomTab token={token} />
         )}
       </div>
     </main>
+  );
+}
+
+const WISDOM_META: Record<WisdomInsight["category"], { label: string; tone: string; icon: string }> = {
+  success_pattern: { label: "Success pattern", tone: "text-emerald-300", icon: "✅" },
+  growth_driver: { label: "Growth driver", tone: "text-sky-300", icon: "🚀" },
+  philosophy: { label: "Core philosophy", tone: "text-violet-300", icon: "🧭" },
+  lesson: { label: "Lesson", tone: "text-amber-300", icon: "📌" },
+  pitfall: { label: "Pitfall", tone: "text-rose-300", icon: "⚠️" },
+};
+const WISDOM_ORDER: WisdomInsight["category"][] = [
+  "philosophy", "success_pattern", "growth_driver", "lesson", "pitfall",
+];
+
+function WisdomTab({ token }: { token: string }) {
+  const [data, setData] = useState<WisdomResp | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [err, setErr] = useState("");
+
+  useEffect(() => {
+    let alive = true;
+    setLoading(true);
+    setErr("");
+    fetchWisdom(token)
+      .then((d) => { if (alive) setData(d); })
+      .catch(() => { if (alive) setErr("Couldn't load wisdom — try again."); })
+      .finally(() => { if (alive) setLoading(false); });
+    return () => { alive = false; };
+  }, [token]);
+
+  if (loading) return <p className="mt-6 text-sm text-zinc-500">distilling…</p>;
+  if (err) return <p className="mt-6 text-xs text-amber-400">{err}</p>;
+  if (!data?.ready || !data.wisdom?.length) {
+    return (
+      <p className="mt-6 text-sm text-zinc-500">
+        Not enough recorded yet to draw lessons. Keep journaling — patterns, habits and
+        recurring themes turn into wisdom as your history grows. 🌱
+      </p>
+    );
+  }
+
+  const groups = WISDOM_ORDER
+    .map((cat) => ({ cat, items: data.wisdom!.filter((w) => w.category === cat) }))
+    .filter((g) => g.items.length > 0);
+
+  return (
+    <section className="mt-6 space-y-5">
+      <p className="text-xs text-zinc-500">{data.note}</p>
+      {groups.map(({ cat, items }) => {
+        const m = WISDOM_META[cat];
+        return (
+          <div key={cat}>
+            <p className={`text-xs font-semibold ${m.tone}`}>
+              {m.icon} {m.label}
+            </p>
+            <ul className="mt-2 space-y-2">
+              {items.map((w, i) => (
+                <li key={i} className="rounded-xl border border-white/10 bg-white/5 p-3">
+                  <p className="text-sm text-zinc-100">{w.statement}</p>
+                  <div className="mt-1.5 flex flex-wrap items-center gap-2 text-[11px] text-zinc-500">
+                    <span className="rounded-full bg-white/5 px-2 py-0.5">
+                      confidence {Math.round(w.confidence * 100)}%
+                    </span>
+                    {w.evidence.slice(0, 2).map((e, j) => (
+                      <span key={j} className="rounded-full bg-white/5 px-2 py-0.5">{e}</span>
+                    ))}
+                  </div>
+                </li>
+              ))}
+            </ul>
+          </div>
+        );
+      })}
+    </section>
   );
 }
 
