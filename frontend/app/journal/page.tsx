@@ -512,11 +512,23 @@ function WisdomTab({ token }: { token: string }) {
   );
 }
 
-const MIND_ICON: Record<string, string> = {
-  Scientist: "🔬", Critic: "⚠️", Optimist: "🌅", Strategist: "♟️",
-  Philosopher: "🧭", Psychologist: "🫀", Historian: "📜", Entrepreneur: "🚀",
-  Engineer: "🛠️", "Creative Thinker": "💡",
+// Each lens gets a named persona + a coloured avatar, so the council reads like a
+// table of distinct advisors rather than a list of roles.
+const MIND_META: Record<string, { name: string; icon: string; avatar: string }> = {
+  Scientist: { name: "Vera", icon: "🔬", avatar: "bg-sky-500/15 text-sky-300 ring-sky-400/30" },
+  Critic: { name: "Cassandra", icon: "⚖️", avatar: "bg-rose-500/15 text-rose-300 ring-rose-400/30" },
+  Optimist: { name: "Sol", icon: "☀️", avatar: "bg-amber-500/15 text-amber-300 ring-amber-400/30" },
+  Strategist: { name: "Atlas", icon: "♟️", avatar: "bg-indigo-500/15 text-indigo-300 ring-indigo-400/30" },
+  Philosopher: { name: "Sophia", icon: "🦉", avatar: "bg-violet-500/15 text-violet-300 ring-violet-400/30" },
+  Psychologist: { name: "Iris", icon: "🧠", avatar: "bg-pink-500/15 text-pink-300 ring-pink-400/30" },
+  Historian: { name: "Clio", icon: "📜", avatar: "bg-stone-500/15 text-stone-300 ring-stone-400/30" },
+  Entrepreneur: { name: "Nova", icon: "🚀", avatar: "bg-orange-500/15 text-orange-300 ring-orange-400/30" },
+  Engineer: { name: "Ada", icon: "⚙️", avatar: "bg-cyan-500/15 text-cyan-300 ring-cyan-400/30" },
+  "Creative Thinker": { name: "Leo", icon: "💡", avatar: "bg-fuchsia-500/15 text-fuchsia-300 ring-fuchsia-400/30" },
 };
+function mindMeta(role: string) {
+  return MIND_META[role] || { name: role, icon: "•", avatar: "bg-white/10 text-zinc-300 ring-white/10" };
+}
 
 const STANCE_STYLE: Record<string, { label: string; cls: string }> = {
   for: { label: "for", cls: "bg-emerald-500/15 text-emerald-300" },
@@ -560,9 +572,10 @@ function CouncilTab({ token }: { token: string }) {
   return (
     <section className="mt-6">
       <p className="text-xs text-zinc-500">
-        Ten minds — Scientist, Critic, Optimist, Strategist, Philosopher, Psychologist,
-        Historian, Entrepreneur, Engineer, Creative — weigh in on your dilemma, grounded
-        in your own principles.
+        Ten advisors — Vera (science), Cassandra (the critic), Sol (optimist), Atlas
+        (strategy), Sophia (philosophy), Iris (psychology), Clio (history), Nova
+        (entrepreneur), Ada (engineering) &amp; Leo (creative) — each weigh in from their
+        own bias, grounded in your principles. They&apos;re meant to disagree.
       </p>
 
       <div className="mt-3 flex items-center gap-2">
@@ -630,31 +643,42 @@ function CouncilTab({ token }: { token: string }) {
           <ul className="space-y-2">
             {data.takes.map((t) => {
               const s = STANCE_STYLE[t.stance] || STANCE_STYLE.depends;
+              const m = mindMeta(t.mind);
               const isDissent = data.dissent?.mind === t.mind;
               return (
                 <li
                   key={t.mind}
-                  className={`rounded-xl border bg-white/5 p-3 ${
-                    isDissent ? "border-amber-400/40" : "border-white/10"
+                  className={`flex gap-3 rounded-xl border bg-white/5 p-3 ${
+                    isDissent ? "border-amber-400/40 bg-amber-500/[0.04]" : "border-white/10"
                   }`}
                 >
-                  <div className="flex items-center justify-between gap-2">
-                    <p className="text-sm font-medium text-zinc-200">
-                      {MIND_ICON[t.mind] || "•"} {t.mind}
-                      <span className="ml-2 text-[11px] font-normal text-zinc-500">{t.bias}</span>
-                    </p>
-                    <span className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] ${s.cls}`}>
-                      {s.label}
-                    </span>
+                  <div
+                    className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-lg ring-1 ${m.avatar}`}
+                    title={t.mind}
+                  >
+                    {m.icon}
                   </div>
-                  <p className="mt-1 text-sm text-zinc-300">{t.take}</p>
-                  <div className="mt-1 flex items-center gap-2">
-                    {t.draws_on.length > 0 && (
-                      <span className="text-[10px] text-zinc-600">from your principles</span>
-                    )}
-                    {isDissent && (
-                      <span className="text-[10px] font-medium text-amber-400">sharpest dissent</span>
-                    )}
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center justify-between gap-2">
+                      <p className="truncate text-sm font-semibold text-zinc-100">
+                        {m.name}
+                        <span className="ml-2 text-[11px] font-normal text-zinc-500">
+                          {t.mind} · {t.bias}
+                        </span>
+                      </p>
+                      <span className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] ${s.cls}`}>
+                        {s.label}
+                      </span>
+                    </div>
+                    <p className="mt-1 text-sm text-zinc-300">{t.take}</p>
+                    <div className="mt-1 flex items-center gap-2">
+                      {t.draws_on.length > 0 && (
+                        <span className="text-[10px] text-zinc-600">grounded in your principles</span>
+                      )}
+                      {isDissent && (
+                        <span className="text-[10px] font-medium text-amber-400">⚡ sharpest dissent</span>
+                      )}
+                    </div>
                   </div>
                 </li>
               );
