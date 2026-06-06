@@ -484,6 +484,42 @@ export async function fetchPrinciples(token: string): Promise<PrinciplesResp> {
   return companionGet<PrinciplesResp>("/cognitive/principles", token, 40000);
 }
 
+// Philosophy evolution & contradictions (reads principle history).
+export interface Contradiction {
+  type: "opposing" | "revision" | "abandoned";
+  detail: string;
+  key?: string;
+  statements?: (string | null)[];
+  current_lean?: string;
+  from?: string | null;
+  to?: string | null;
+}
+export interface TimelineEvent {
+  ts: string;
+  period: string;
+  key: string;
+  category?: string;
+  event: string;
+  confidence?: number;
+  statement: string;
+}
+export interface TimelinePeriod {
+  period: string;
+  events: TimelineEvent[];
+  summary: string;
+}
+export interface PhilosophyResp {
+  ready: boolean;
+  note?: string;
+  contradiction_count?: number;
+  contradictions?: Contradiction[];
+  timeline?: TimelinePeriod[];
+  narrative?: string | null;
+}
+export async function fetchPhilosophy(token: string): Promise<PhilosophyResp> {
+  return companionGet<PhilosophyResp>("/cognitive/philosophy", token, 90000);
+}
+
 export async function fetchMonthReview(token: string, ym?: string): Promise<ReviewResp2> {
   const q = ym ? `?month=${encodeURIComponent(ym)}` : "";
   return companionGet<ReviewResp2>(`/journal/review/month${q}`, token);

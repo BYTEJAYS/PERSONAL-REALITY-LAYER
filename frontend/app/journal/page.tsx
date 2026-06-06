@@ -8,11 +8,13 @@ import {
   fetchMonthReview,
   fetchReflection,
   fetchTimeline,
+  fetchPhilosophy,
   fetchPrinciples,
   fetchWisdom,
   fetchYearReview,
   JournalDay,
   JournalFullEntry,
+  PhilosophyResp,
   Principle,
   PrinciplesResp,
   ReflectionResp,
@@ -512,6 +514,7 @@ const STATUS_TONE: Record<Principle["status"], string> = {
 
 function PrinciplesTab({ token }: { token: string }) {
   const [data, setData] = useState<PrinciplesResp | null>(null);
+  const [philo, setPhilo] = useState<PhilosophyResp | null>(null);
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState("");
 
@@ -519,8 +522,13 @@ function PrinciplesTab({ token }: { token: string }) {
     let alive = true;
     setLoading(true);
     setErr("");
+    // Build/persist principles first, then read their evolution & contradictions.
     fetchPrinciples(token)
-      .then((d) => { if (alive) setData(d); })
+      .then((d) => {
+        if (alive) setData(d);
+        return fetchPhilosophy(token);
+      })
+      .then((p) => { if (alive) setPhilo(p); })
       .catch(() => { if (alive) setErr("Couldn't load principles — try again."); })
       .finally(() => { if (alive) setLoading(false); });
     return () => { alive = false; };
@@ -573,6 +581,59 @@ function PrinciplesTab({ token }: { token: string }) {
               </li>
             ))}
           </ul>
+        </div>
+      )}
+
+      {/* Philosophy narrative */}
+      {philo?.narrative && (
+        <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
+          <p className="text-xs font-semibold text-zinc-300">How your thinking has evolved</p>
+          <p className="mt-2 text-sm leading-relaxed text-zinc-200">{philo.narrative}</p>
+        </div>
+      )}
+
+      {/* Contradictions / tensions */}
+      {(philo?.contradictions?.length ?? 0) > 0 && (
+        <div className="rounded-2xl border border-amber-400/20 bg-amber-500/5 p-4">
+          <p className="text-xs font-semibold text-amber-200">⚖️ Tensions &amp; belief shifts</p>
+          <ul className="mt-2 space-y-2">
+            {philo!.contradictions!.map((c, i) => (
+              <li key={i} className="text-sm text-zinc-200">
+                <span className="mr-1.5 rounded-full bg-amber-500/15 px-2 py-0.5 text-[11px] capitalize text-amber-300">
+                  {c.type}
+                </span>
+                {c.detail}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      {/* Evolution timeline */}
+      {(philo?.timeline?.length ?? 0) > 0 && (
+        <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
+          <p className="text-xs font-semibold text-zinc-300">Evolution timeline</p>
+          <ol className="mt-3 space-y-3 border-l border-white/10 pl-4">
+            {philo!.timeline!.map((p) => (
+              <li key={p.period} className="relative">
+                <span className="absolute -left-[21px] top-1 h-2 w-2 rounded-full bg-indigo-400" />
+                <p className="text-xs font-medium text-zinc-300">{p.period}</p>
+                <p className="text-[11px] text-zinc-500">{p.summary}</p>
+                <ul className="mt-1 space-y-0.5">
+                  {p.events.slice(0, 6).map((e, j) => (
+                    <li key={j} className="text-xs text-zinc-400">
+                      <span className={
+                        e.event === "strengthened" ? "text-emerald-400"
+                        : e.event === "weakened" || e.event === "faded" ? "text-amber-400"
+                        : e.event === "revised" ? "text-violet-400" : "text-sky-400"
+                      }>{e.event}</span>
+                      {" · "}{e.statement}
+                    </li>
+                  ))}
+                </ul>
+              </li>
+            ))}
+          </ol>
         </div>
       )}
 
