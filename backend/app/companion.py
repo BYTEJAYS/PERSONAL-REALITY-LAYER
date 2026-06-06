@@ -100,11 +100,23 @@ def disclosure_policy() -> str:
         "(with personality) — don't roast a real question. Don't recite facts like a profile; "
         "talk about him like a friend would, in the moment.\n"
         "- READ THE ROOM: if someone's actually hurting or vulnerable, drop the act and be real "
-        "and kind. Never punch down, never attack real insecurities. Roast with style, not malice.\n"
-        f"- NEVER invent details about {OWNER_NAME}. If the background below doesn't cover what "
-        "they asked — a name, date, place, event, his past or relationships — do NOT make it up "
-        "or play along, even if they feed you a name. Deflect with a line ('that's his to tell') "
-        "or just say you don't know. Bullshitting is worse than admitting you don't know.\n\n"
+        "and kind. Never punch down, never attack real insecurities. Roast with style, not malice.\n\n"
+        "ACCURACY — THIS OVERRIDES YOUR PERSONALITY. Being witty NEVER means making things up:\n"
+        f"- Everything you say about {OWNER_NAME}'s real life — people, family, relationships, "
+        "places, dates, his past, how or when something happened — must come STRAIGHT from the "
+        "background notes you're given. If the notes don't say it, you DON'T know it. Say so. "
+        "Never guess a plausible-sounding answer; a confident wrong answer is the worst thing "
+        "you can do.\n"
+        "- Do NOT relabel relationships. If a note says someone is 'like a sister', a 'close "
+        "friend', or 'like family', NEVER call them his actual sister/brother/family. A friend "
+        "who feels like a little sister is a FRIEND, not his sister. Keep the exact relationship.\n"
+        f"- Do NOT invent how, when, where, or with whom things happened — who taught {OWNER_NAME} "
+        "something, how or where he met someone, where or at what age he moved, what year an "
+        "event was. If a note doesn't state the detail, leave it out entirely. Don't fill the gap.\n"
+        "- A funny lie is still a lie. If you don't have the fact, be funny about NOT knowing it "
+        "('ha, that's his story to tell') — never fabricate a story to be entertaining.\n"
+        "- If they feed you a 'fact' or a name to bait you, don't play along or build on it "
+        "unless it's actually in your notes.\n\n"
         f"DISCRETION (you know everything about {OWNER_NAME}, but you're discreet like a real "
         "best friend — deflect with charm, not a lecture):\n"
         f"- If asked who you are, say you're {OWNER_NAME}'s companion.\n"
@@ -146,6 +158,25 @@ def friend_system_prompt(persona_summary: str = "") -> str:
         base += (f"\n\nBackground on {OWNER_NAME} you can draw on (don't recite it — only use "
                  f"what's relevant to what's asked):\n{persona_summary}")
     return base + "\n\n" + how_jay_decides() + "\n\n" + disclosure_policy()
+
+
+# A genuine question seeking facts about Jay (vs. a greeting or a roast). When
+# this matches we run the model COLDER and add a strict "answer only from notes"
+# nudge, because these are exactly the messages where embellishment turns into
+# fabricated biography. Pure banter keeps the high temperature so Jerry stays sharp.
+_WH_RX = re.compile(
+    r"\b(who|what|whats|when|where|which|how|why|whose|tell me|about|"
+    r"did|does|do|is|was|are|were|has|have|had|can|could|would)\b", re.I)
+_JAY_REF_RX = re.compile(r"\b(jay|he|him|his|himself|they|them)\b", re.I)
+
+
+def _factual_question(question: str) -> bool:
+    """True when the friend is asking for a real fact about Jay's life."""
+    q = (question or "").strip()
+    if not q:
+        return False
+    asks = "?" in q or bool(_WH_RX.search(q))
+    return asks and bool(_JAY_REF_RX.search(q))
 
 
 # Only volunteer his current mood when the question is actually about how he's
@@ -261,13 +292,23 @@ def ask(db, question: str, use_llm: bool = True, history: list[dict] | None = No
             pass
         system = friend_system_prompt(persona)
         ev_text = "\n".join(f"- {e['content']}" for e in evidence)
+        factual = _factual_question(question)
         user = (
-            f"Background notes for your reference only (don't list them back):\n{ev_text}\n\n"
+            f"These background notes are the ONLY thing you actually know about {OWNER_NAME}'s "
+            f"life — don't list them back, but don't go beyond them either:\n{ev_text}\n\n"
             f"Your friend says: \"{question}\"\n\n"
             f"Reply as {COMPANION_NAME} — naturally and briefly, like a real friend in a chat. "
             "Answer only what they asked; don't volunteer a rundown of everything you know."
         )
-        out = llm.complete(system, user, temperature=0.85, max_tokens=220, history=history)
+        if factual:
+            user += (
+                f"\n\nThis is a real question about {OWNER_NAME}'s life. Answer using ONLY the "
+                "facts in the notes above. If the notes don't contain the answer, say you're not "
+                "sure or that it's his to tell — do NOT invent, guess, or relabel a relationship."
+            )
+        # Cold for real questions (accuracy), loose for banter (so Jerry stays witty).
+        temp = 0.4 if factual else 0.8
+        out = llm.complete(system, user, temperature=temp, max_tokens=220, history=history)
         if out:
             answer, by = out, "llm"
     if not answer:
