@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import dynamic from "next/dynamic";
 import {
   addJournal,
   askCouncil,
@@ -27,6 +28,9 @@ import {
   WisdomInsight,
   WisdomResp,
 } from "@/lib/api";
+
+// Floating stylized head avatar (R3F) — client-only, never SSR'd.
+const PlutoHead = dynamic(() => import("@/components/PlutoHead"), { ssr: false });
 
 const OWNER_KEY = "prl_owner_token";
 
@@ -191,6 +195,9 @@ export default function JournalPage() {
     return (
       <main className="min-h-screen bg-[#040507] text-zinc-100 flex items-center justify-center px-4">
         <div className="w-full max-w-sm rounded-2xl border border-white/10 bg-white/5 p-6">
+          <div className="relative mx-auto mb-1 h-32 w-32">
+            <PlutoHead className="!absolute inset-0 h-full w-full" />
+          </div>
           <h1 className="text-lg font-semibold">Journal</h1>
           <p className="mt-1 text-sm text-zinc-400">
             Your private journal. Paste your owner token to open it.
@@ -228,16 +235,22 @@ export default function JournalPage() {
   return (
     <main className="min-h-screen bg-[#040507] text-zinc-100 px-4 py-8">
       <div className="mx-auto max-w-2xl">
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-xl font-semibold">Journal</h1>
-            <p className="text-xs text-zinc-500">
+        <div className="flex items-center gap-4 rounded-2xl border border-white/10 bg-gradient-to-br from-white/[0.06] to-white/[0.015] p-4">
+          <div className="relative h-24 w-24 shrink-0 sm:h-28 sm:w-28">
+            <PlutoHead className="!absolute inset-0 h-full w-full" />
+          </div>
+          <div className="min-w-0">
+            <div className="text-[10px] font-medium uppercase tracking-[0.2em] text-indigo-300/60">
+              Personal Reality Layer
+            </div>
+            <h1 className="text-xl font-semibold leading-tight sm:text-2xl">Journal</h1>
+            <p className="mt-0.5 text-xs text-zinc-500">
               {totalEntries} {totalEntries === 1 ? "entry" : "entries"} · private to you — Jerry never quotes it to friends
             </p>
           </div>
           <button
             onClick={() => { setDayCache({}); load(token); }}
-            className="rounded-full bg-white/5 px-3 py-1 text-xs text-zinc-300 hover:bg-white/10"
+            className="ml-auto self-start rounded-full bg-white/5 px-3 py-1 text-xs text-zinc-300 hover:bg-white/10"
           >
             {loading ? "refreshing…" : "refresh"}
           </button>
