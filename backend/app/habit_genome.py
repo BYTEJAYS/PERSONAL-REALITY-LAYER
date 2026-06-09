@@ -140,12 +140,13 @@ def build(db, weeks: int = 12, top_n: int = 12) -> dict:
         for lo, hi in bounds
     ]
 
-    # Candidate habits = most-active skills + projects.
+    # Candidate habits = explicit habit entities (e.g. tracked via ASCENSION)
+    # plus the most-active skills + projects as a behavioural proxy.
     cand = db.execute(
         select(Entity.id, Entity.name)
         .join(MemoryEntity, MemoryEntity.entity_id == Entity.id)
         .join(Memory, Memory.id == MemoryEntity.memory_id)
-        .where(Entity.type.in_(("skill", "project")))
+        .where(Entity.type.in_(("skill", "project", "habit")))
         .group_by(Entity.id)
         .order_by(func.count(MemoryEntity.memory_id).desc())
         .limit(top_n)

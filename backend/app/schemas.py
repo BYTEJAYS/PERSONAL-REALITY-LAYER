@@ -124,6 +124,36 @@ class TextIngestIn(BaseModel):
     emotion: str | None = None
 
 
+class HabitIn(BaseModel):
+    name: str
+    dates: list[str] = []          # YYYY-MM-DD completion dates
+    stat: str | None = None        # which attribute it builds (STR/INT/…)
+    frequency: str | None = None   # daily / weekly / …
+    category: str | None = None
+    priority: int | None = None    # 1 (low) .. 3 (high)
+    notes: str | None = None
+    streak: int | None = None
+    best_streak: int | None = None
+
+
+class HabitsIngestIn(BaseModel):
+    habits: list[HabitIn] = []
+
+
+class QuestIn(BaseModel):
+    id: str
+    title: str
+    completed_at: str              # YYYY-MM-DD
+    description: str | None = None
+    stat: str | None = None
+    type: str | None = None
+    xp: int | None = None
+
+
+class QuestsIngestIn(BaseModel):
+    quests: list[QuestIn] = []
+
+
 class JournalIn(BaseModel):
     text: str
     ts: datetime | None = None     # when it happened; defaults to now (UTC)

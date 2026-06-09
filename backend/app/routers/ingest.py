@@ -8,8 +8,16 @@ from sqlalchemy.orm import Session
 from .. import ingest_service
 from ..db import get_db
 from ..ingestion.git_ingest import ingest_repo
+from ..ingestion.habits_ingest import ingest_habits
+from ..ingestion.quests_ingest import ingest_quests
 from ..ingestion.text_ingest import ingest_text
-from ..schemas import ConnectorRunIn, GitIngestIn, TextIngestIn
+from ..schemas import (
+    ConnectorRunIn,
+    GitIngestIn,
+    HabitsIngestIn,
+    QuestsIngestIn,
+    TextIngestIn,
+)
 
 router = APIRouter(prefix="/ingest", tags=["ingest"])
 
@@ -81,3 +89,20 @@ def ingest_free_text(payload: TextIngestIn, db: Session = Depends(get_db)):
         db, payload.text, source=payload.source,
         title=payload.title, importance=payload.importance, emotion=payload.emotion,
     )
+
+
+@router.post("/habits")
+def ingest_habit_history(payload: HabitsIngestIn, db: Session = Depends(get_db)):
+    """Ingest habits (and their completion-date histories) tracked in ASCENSION.
+
+    Each completion becomes a backdated memory linked to a `habit` entity, so the
+    behavioural engines learn each habit's real lifecycle. Idempotent — safe to
+    push the full history on every sync.
+    """
+    return ingest_habits(db, [h.model_dump() for h in payload.habits])
+
+
+@router.post("/quests")
+def ingest_completed_quests(payload: QuestsIngestIn, db: Session = Depends(get_db)):
+    """Ingest completed quests tracked in ASCENSION as dated episodic memories."""
+    return ingest_quests(db, [q.model_dump() for q in payload.quests])

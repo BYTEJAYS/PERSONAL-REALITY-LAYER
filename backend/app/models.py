@@ -31,7 +31,7 @@ def _now() -> datetime:
 
 
 # Entity types map onto the brain's cognitive regions.
-ENTITY_TYPES = ("person", "project", "goal", "skill", "place")
+ENTITY_TYPES = ("person", "project", "goal", "skill", "place", "habit")
 
 REGION_FOR_ENTITY = {
     "person": "social",
@@ -39,6 +39,8 @@ REGION_FOR_ENTITY = {
     "goal": "goal",
     "skill": "knowledge",
     "place": "memory",
+    # Habits (e.g. tracked via ASCENSION) are discipline in service of goals.
+    "habit": "goal",
 }
 
 
